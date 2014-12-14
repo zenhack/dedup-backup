@@ -27,7 +27,7 @@ doBackup :: FilePath -> FilePath -> FilePath -> IO ()
 doBackup src dest blobs = do
     files <- getFileTreeStatus src
 
-    forType files isDirectory (\dir -> do
+    forType files isDirectory (\dir ->
         createDirectoryIfMissing True (dest // dropRoot dir))
 
     forType files isRegularFile (\filename -> do
