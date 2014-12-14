@@ -29,20 +29,20 @@ doBackup src dest blobs = do
     files <- getFileTreeStatus src
 
     forType files isDirectory $ \dir ->
-        createDirectoryIfMissing True (dest // dropRoot dir)
+        createDirectoryIfMissing True (dest // stripSrc dir)
 
     forType files isRegularFile $ \filename -> do
         file <- B.readFile filename
         let blobname = blobs // unpack  (Hex.encode $ SHA1.hashlazy file)
         have <- doesFileExist blobname
         unless have $ B.readFile filename >>= B.writeFile blobname
-        createLink blobname (dest // dropRoot filename)
+        createLink blobname (dest // stripSrc filename)
 
     forType files isSymbolicLink $ \link -> do
         target <- readSymbolicLink link
-        createSymbolicLink target (dest // dropRoot link)
+        createSymbolicLink target (dest // stripSrc link)
  where
-    dropRoot path = let Just suffix = stripPrefix src path in suffix
+    stripSrc path = let Just suffix = stripPrefix src path in suffix
     forType files pred fn = let files' = map fst $ filter (pred . snd) files in
         forM_ files' fn
 
