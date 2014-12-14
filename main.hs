@@ -12,12 +12,12 @@ import Data.List (stripPrefix)
 -- right starts with a slash.
 (//) left right = left ++ "/" ++ right
 
-getFileTreeStatus :: FilePath -> IO [(FilePath, FileStatus)]
-getFileTreeStatus path = do
+lStatTree :: FilePath -> IO [(FilePath, FileStatus)]
+lStatTree path = do
     status <- getSymbolicLinkStatus path
     if isDirectory status then do
         contentsNames <- liftM (map (path //) . filter (`notElem` [".", ".."])) (getDirectoryContents path)
-        contents <- liftM concat $ mapM getFileTreeStatus contentsNames
+        contents <- liftM concat $ mapM lStatTree contentsNames
         return $ (path, status):contents
     else
         return [(path, status)]
@@ -26,7 +26,7 @@ getFileTreeStatus path = do
 -- makes a backup of src at dest, using blobs as the blob directory.
 doBackup :: FilePath -> FilePath -> FilePath -> IO ()
 doBackup src dest blobs = do
-    files <- getFileTreeStatus src
+    files <- lStatTree src
 
     forType files isDirectory $ \dir ->
         createDirectoryIfMissing True (dest // stripSrc dir)
