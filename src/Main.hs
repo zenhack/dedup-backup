@@ -16,7 +16,7 @@
 -}
 import System.Posix.Files
 import System.Directory (getDirectoryContents, createDirectoryIfMissing, doesFileExist)
-import Control.Monad (liftM, forM_, unless)
+import Control.Monad (liftM, mapM_, unless)
 import qualified Crypto.Hash.SHA1 as SHA1
 import qualified Data.ByteString.Lazy as B
 import qualified Data.ByteString.Base16 as Hex
@@ -44,23 +44,33 @@ doBackup :: FilePath -> FilePath -> FilePath -> IO ()
 doBackup src dest blobs = do
     files <- lStatTree src
 
-    forType files isDirectory $ \dir ->
+    forType files isDirectory $ \(dir, fileinfo) -> do
         createDirectoryIfMissing True (dest // stripSrc dir)
+        syncMetadata dir fileinfo
 
-    forType files isRegularFile $ \filename -> do
+    forType files isRegularFile $ \(filename, fileinfo) -> do
         file <- B.readFile filename
         let blobname = blobs // unpack  (Hex.encode $ SHA1.hashlazy file)
         have <- doesFileExist blobname
         unless have $ B.readFile filename >>= B.writeFile blobname
         createLink blobname (dest // stripSrc filename)
+        syncMetadata filename fileinfo
 
-    forType files isSymbolicLink $ \link -> do
+    forType files isSymbolicLink $ \(link, fileinfo) -> do
         target <- readSymbolicLink link
         createSymbolicLink target (dest // stripSrc link)
+        syncMetadata link fileinfo
  where
     stripSrc path = let Just suffix = stripPrefix src path in suffix
-    forType files pred fn = let files' = map fst $ filter (pred . snd) files in
-        forM_ files' fn
+    forType files pred fn = mapM_ fn (filter (pred . snd) files)
+    syncMetadata filename' fileinfo = do
+        let filename = dest // stripSrc filename'
+        setSymbolicLinkOwnerAndGroup filename (fileOwner fileinfo) (fileGroup fileinfo)
+        unless (isSymbolicLink fileinfo) $ do
+            -- These act on the underlying file, and there are no symlink
+            -- equivalents.
+            setFileMode filename (fileMode fileinfo)
+            setFileTimes filename (accessTime fileinfo) (modificationTime fileinfo)
 
 main :: IO ()
 main = do
