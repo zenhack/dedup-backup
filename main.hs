@@ -1,6 +1,6 @@
 import System.Posix.Files
 import System.Directory (getDirectoryContents, createDirectoryIfMissing, doesFileExist)
-import Control.Monad (liftM, forM, void, unless)
+import Control.Monad (liftM, forM_, unless)
 import qualified Crypto.Hash.SHA1 as SHA1
 import qualified Data.ByteString.Lazy as B
 import qualified Data.ByteString.Base16 as Hex
@@ -27,23 +27,23 @@ doBackup :: FilePath -> FilePath -> FilePath -> IO ()
 doBackup src dest blobs = do
     files <- getFileTreeStatus src
 
-    forType files isDirectory (\dir ->
-        createDirectoryIfMissing True (dest // dropRoot dir))
+    forType files isDirectory $ \dir ->
+        createDirectoryIfMissing True (dest // dropRoot dir)
 
-    forType files isRegularFile (\filename -> do
+    forType files isRegularFile $ \filename -> do
         file <- B.readFile filename
-        let blobname = blobs // unpack  (Hex.encode $ SHA1.hashlazy file) in do
-            have <- doesFileExist blobname
-            unless have $ B.readFile filename >>= B.writeFile blobname
-            createLink blobname (dest // dropRoot filename))
+        let blobname = blobs // unpack  (Hex.encode $ SHA1.hashlazy file)
+        have <- doesFileExist blobname
+        unless have $ B.readFile filename >>= B.writeFile blobname
+        createLink blobname (dest // dropRoot filename)
 
-    forType files isSymbolicLink (\link -> do
+    forType files isSymbolicLink $ \link -> do
         target <- readSymbolicLink link
-        createSymbolicLink target (dest // dropRoot link))
+        createSymbolicLink target (dest // dropRoot link)
  where
     dropRoot = drop (length src)
     forType files pred fn = let files' = map fst $ filter (pred . snd) files in
-        void $ forM files' fn
+        forM_ files' fn
 
 main :: IO ()
 main = do
