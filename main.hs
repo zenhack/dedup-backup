@@ -6,6 +6,7 @@ import qualified Data.ByteString.Lazy as B
 import qualified Data.ByteString.Base16 as Hex
 import Data.ByteString.Char8 (unpack)
 import System.Environment
+import Data.List (stripPrefix)
 
 -- // from System.FilePath *almost* does what we want, but it drops left if
 -- right starts with a slash.
@@ -41,7 +42,7 @@ doBackup src dest blobs = do
         target <- readSymbolicLink link
         createSymbolicLink target (dest // dropRoot link)
  where
-    dropRoot = drop (length src)
+    dropRoot path = let Just suffix = stripPrefix src path in suffix
     forType files pred fn = let files' = map fst $ filter (pred . snd) files in
         forM_ files' fn
 
