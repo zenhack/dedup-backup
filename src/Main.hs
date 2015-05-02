@@ -1,5 +1,5 @@
 {-
-    Copyright 2014 Ian Denhardt <ian@zenhack.net>
+    Copyright 2015 Ian Denhardt <ian@zenhack.net>
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -38,10 +38,12 @@ lStatTree path = do
     else
         return [(path, status)]
 
--- | doBackup src dest blobs
--- makes a backup of src at dest, using blobs as the blob directory.
-doBackup :: FilePath -> FilePath -> FilePath -> IO ()
-doBackup src dest blobs = do
+-- | doBackup src dest blobs last
+-- makes a backup of src at dest, using blobs as the blob directory. If last is
+-- not Nothing, then the value it contains must be the path to a previous
+-- backup, which will be used to compare modification times.
+doBackup :: FilePath -> FilePath -> FilePath -> Maybe FilePath -> IO ()
+doBackup src dest blobs last = do
     files <- lStatTree src
 
     forType files isDirectory $ \(dir, fileinfo) -> do
@@ -49,11 +51,26 @@ doBackup src dest blobs = do
         syncMetadata dir fileinfo
 
     forType files isRegularFile $ \(filename, fileinfo) -> do
-        file <- B.readFile filename
-        let blobname = blobs // unpack  (Hex.encode $ SHA1.hashlazy file)
-        have <- doesFileExist blobname
-        unless have $ B.readFile filename >>= B.writeFile blobname
-        createLink blobname (dest // stripSrc filename)
+        changed <- case last of
+            Nothing -> return True
+            Just lastpath -> do
+                let lastpath' = lastpath // stripSrc filename
+                exists <- doesFileExist lastpath'
+                if exists then do
+                    lastinfo <- getSymbolicLinkStatus lastpath'
+                    return $ not (isRegularFile lastinfo) &&
+                               (modificationTime lastinfo < modificationTime fileinfo)
+                else return True
+        if changed
+          then do
+            file <- B.readFile filename
+            let blobname = blobs // unpack  (Hex.encode $ SHA1.hashlazy file)
+            have <- doesFileExist blobname
+            unless have $ B.readFile filename >>= B.writeFile blobname
+            createLink blobname (dest // stripSrc filename)
+          else do
+            let Just lastpath = last
+            createLink (lastpath // stripSrc filename) (dest // stripSrc filename)
         syncMetadata filename fileinfo
 
     forType files isSymbolicLink $ \(link, fileinfo) -> do
@@ -76,5 +93,6 @@ main :: IO ()
 main = do
     args <- getArgs
     case args of
-        [src, dest, blobs] -> doBackup src dest blobs
-        _ -> putStrLn "Usage : backup <src> <dest> <blobs>"
+        [src, dest, blobs] -> doBackup src dest blobs Nothing
+        [src, dest, blobs, last] -> doBackup src dest blobs (Just last)
+        _ -> putStrLn "Usage : backup <src> <dest> <blobs> [ <last> ]"
