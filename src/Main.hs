@@ -89,7 +89,7 @@ doAction spec (DedupCopy path status) = do
             exists <- doesFileExist prevpath'
             if exists then do
                 prevstatus <- getSymbolicLinkStatus prevpath'
-                return $ not (isRegularFile prevstatus) &&
+                return $ not (isRegularFile prevstatus) ||
                            (modificationTime prevstatus < modificationTime status)
             else return True
     if changed
