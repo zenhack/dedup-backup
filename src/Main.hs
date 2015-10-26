@@ -28,71 +28,119 @@ import Data.List (stripPrefix)
 -- right starts with a slash.
 (//) left right = left ++ "/" ++ right
 
-lStatTree :: FilePath -> IO [(FilePath, FileStatus)]
+data JobSpec = JobSpec { src   :: FilePath
+                       , dest  :: FilePath
+                       , blobs :: FilePath
+                       , prev  :: Maybe FilePath
+                       }
+
+data FileTree = Directory FilePath FileStatus [FileTree]
+              | RegularFile FilePath FileStatus
+              | Symlink FilePath FileStatus
+              | Unsupported FilePath FileStatus
+
+data Action = MkDir FilePath FileStatus [Action]
+            | MkSymlink FilePath FileStatus
+            | DedupCopy FilePath FileStatus
+            | Report String
+
+-- | @(pathMap f tree)@ applies @f@ to all @FilePath@s in @tree@, recursively.
+pathMap :: (FilePath -> FilePath) -> FileTree -> FileTree
+pathMap f (Directory path status contents) =
+    Directory (f path) status (map (pathMap f) contents)
+pathMap f (RegularFile  path info) = RegularFile (f path) info
+pathMap f (Symlink      path info) = Symlink     (f path) info
+pathMap f (Unsupported  path info) = Unsupported (f path) info
+
+relativizePaths :: FilePath -> FileTree -> FileTree
+relativizePaths srcDir = pathMap stripSrcDir
+  where stripSrcDir = (\(Just path) -> path) . (stripPrefix srcDir)
+
+lStatTree :: FilePath -> IO FileTree
 lStatTree path = do
     status <- getSymbolicLinkStatus path
     if isDirectory status then do
-        contentsNames <- liftM (map (path //) . filter (`notElem` [".", ".."])) (getDirectoryContents path)
-        contents <- liftM concat $ mapM lStatTree contentsNames
-        return $ (path, status):contents
+        rawContentsNames <- getDirectoryContents path
+        let contentsNames = filter (`notElem` [".", ".."]) rawContentsNames
+        contents <- mapM lStatTree (map (path //) contentsNames)
+        return $ Directory path status contents
+    else if isRegularFile status then
+        return $ RegularFile path status
+    else if isSymbolicLink status then
+        return $ Symlink path status
     else
-        return [(path, status)]
+        return $ Unsupported path status
 
--- | doBackup src dest blobs last
--- makes a backup of src at dest, using blobs as the blob directory. If last is
--- not Nothing, then the value it contains must be the path to a previous
--- backup, which will be used to compare modification times.
-doBackup :: FilePath -> FilePath -> FilePath -> Maybe FilePath -> IO ()
-doBackup src dest blobs last = do
-    files <- lStatTree src
+doAction :: JobSpec -> Action -> IO ()
+doAction spec (MkDir path status contents) = do
+    let path' = dest spec // path
+    createDirectoryIfMissing True path'
+    syncMetadata path' status
+    mapM_ (doAction spec) contents
+doAction spec (MkSymlink path status) = do
+    target <- readSymbolicLink (src spec // path)
+    createSymbolicLink target (dest spec // path)
+    syncMetadata (dest spec // path) status
+doAction spec (DedupCopy path status) = do
+    changed <- case prev spec of
+        Nothing -> return True
+        Just prevpath -> do
+            let prevpath' = prevpath // path
+            exists <- doesFileExist prevpath'
+            if exists then do
+                prevstatus <- getSymbolicLinkStatus prevpath'
+                return $ not (isRegularFile prevstatus) &&
+                           (modificationTime prevstatus < modificationTime status)
+            else return True
+    if changed
+      then do
+        let srcpath = src spec // path
+        file <- B.readFile srcpath
+        let blobname = blobs spec // unpack (Hex.encode $ SHA1.hashlazy file)
+        -- TODO: We should do this in one step by opening blobname with
+        -- O_CREATE | O_EXCL, which will eliminate a race condition. We don't
+        -- actually guarantee anything about concurrency safety, but it would
+        -- make things more robust:
+        have <- doesFileExist blobname
+        unless have $ B.readFile srcpath >>= B.writeFile blobname
+        createLink blobname (dest spec // path)
+      else do
+        let Just prevpath = prev spec
+        createLink (prevpath // path) (dest spec // path)
+    syncMetadata (dest spec // path) status
+doAction _ (Report msg) = putStrLn msg
 
-    forType files isDirectory $ \(dir, fileinfo) -> do
-        createDirectoryIfMissing True (dest // stripSrc dir)
-        syncMetadata dir fileinfo
 
-    forType files isRegularFile $ \(filename, fileinfo) -> do
-        changed <- case last of
-            Nothing -> return True
-            Just lastpath -> do
-                let lastpath' = lastpath // stripSrc filename
-                exists <- doesFileExist lastpath'
-                if exists then do
-                    lastinfo <- getSymbolicLinkStatus lastpath'
-                    return $ not (isRegularFile lastinfo) &&
-                               (modificationTime lastinfo < modificationTime fileinfo)
-                else return True
-        if changed
-          then do
-            file <- B.readFile filename
-            let blobname = blobs // unpack  (Hex.encode $ SHA1.hashlazy file)
-            have <- doesFileExist blobname
-            unless have $ B.readFile filename >>= B.writeFile blobname
-            createLink blobname (dest // stripSrc filename)
-          else do
-            let Just lastpath = last
-            createLink (lastpath // stripSrc filename) (dest // stripSrc filename)
-        syncMetadata filename fileinfo
 
-    forType files isSymbolicLink $ \(link, fileinfo) -> do
-        target <- readSymbolicLink link
-        createSymbolicLink target (dest // stripSrc link)
-        syncMetadata link fileinfo
- where
-    stripSrc path = let Just suffix = stripPrefix src path in suffix
-    forType files pred fn = mapM_ fn (filter (pred . snd) files)
-    syncMetadata filename' fileinfo = do
-        let filename = dest // stripSrc filename'
-        setSymbolicLinkOwnerAndGroup filename (fileOwner fileinfo) (fileGroup fileinfo)
-        unless (isSymbolicLink fileinfo) $ do
-            -- These act on the underlying file, and there are no symlink
-            -- equivalents.
-            setFileMode filename (fileMode fileinfo)
-            setFileTimes filename (accessTime fileinfo) (modificationTime fileinfo)
+mkAction :: FileTree -> Action
+mkAction (Directory path status contents) =
+    MkDir path status (map mkAction contents)
+mkAction (Symlink path status) = MkSymlink path status
+mkAction (RegularFile path status) = DedupCopy path status
+mkAction (Unsupported path _) =
+    Report $ "Ignoring file of unsupported type: " ++ show path
+
+doBackup :: JobSpec -> IO ()
+doBackup spec = do
+    let srcDir = src spec
+    srcTree <- lStatTree srcDir
+    let relativeTree = relativizePaths srcDir srcTree
+    let action = mkAction relativeTree
+    doAction spec action
+
+syncMetadata :: FilePath -> FileStatus -> IO ()
+syncMetadata path status = do
+    setSymbolicLinkOwnerAndGroup path (fileOwner status) (fileGroup status)
+    unless (isSymbolicLink status) $ do
+        -- These act on the underlying file, and there are no symlink
+        -- equivalents.
+        setFileMode path (fileMode status)
+        setFileTimes path (accessTime status) (modificationTime status)
 
 main :: IO ()
 main = do
     args <- getArgs
     case args of
-        [src, dest, blobs] -> doBackup src dest blobs Nothing
-        [src, dest, blobs, last] -> doBackup src dest blobs (Just last)
-        _ -> putStrLn "Usage : backup <src> <dest> <blobs> [ <last> ]"
+        [src, dest, blobs] -> doBackup $ JobSpec src dest blobs Nothing
+        [src, dest, blobs, prev] -> doBackup $ JobSpec src dest blobs (Just prev)
+        _ -> putStrLn "Usage : backup <src> <dest> <blobs> [ <prev> ]"
