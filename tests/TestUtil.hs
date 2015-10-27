@@ -6,6 +6,7 @@ import qualified System.Posix.Files.ByteString as PFB
 import qualified System.Posix.Types as PT
 import qualified System.Posix.User as PU
 import qualified Main as Main
+import Main ((//))
 import Test.Framework
 import Test.QuickCheck.Arbitrary (Arbitrary, arbitrary)
 import Test.QuickCheck.Gen (oneof)
@@ -45,12 +46,16 @@ data FileStatus = FileStatus { mode  :: PT.FileMode
 
 instance Arbitrary FileStatus where
     arbitrary = do
-        status <- FileStatus <$>     return PFB.ownerModes
-                                 <*> return effectiveUID
-                                 <*> return effectiveGID
-                                 <*> return epoch1
-                                 <*> return epoch1
-        return status
+        FileStatus <$>     return PFB.ownerModes
+                       <*> return effectiveUID
+                       <*> return effectiveGID
+                       <*> return epoch1
+                       <*> return epoch1
+
+mkStatus ty = do
+    status <- arbitrary
+    return $ status { mode = PFB.unionFileModes (mode status)
+                                                (typeMode ty) }
 
 hasMode :: PT.FileMode -> PT.FileMode -> Bool
 hasMode all check = PFB.intersectFileModes all check == check
@@ -66,15 +71,14 @@ instance Main.FileStatus FileStatus where
     modificationTime = ctime
 
 sampleFileNames = map (:[]) ['a'..'z']
+mkName = oneof $ map return sampleFileNames
 
 instance Arbitrary (Main.FileTree FileStatus) where
-    arbitrary = oneof [ Main.Directory <$> mkName <*> mkStatus Directory <*> arbitrary
+    arbitrary = oneof [ do name <- mkName
+                           contents <- arbitrary
+                           status <- mkStatus Directory
+                           let contents' = map (Main.pathMap (name //)) contents
+                           return $ Main.Directory name status contents'
                       , Main.RegularFile <$> mkName <*> mkStatus RegularFile
                       , Main.Symlink <$> mkName <*> mkStatus Symlink
                       ]
-      where
-        mkStatus ty = do
-            status <- arbitrary
-            return $ status { mode = PFB.unionFileModes (mode status)
-                                                        (typeMode ty) }
-        mkName = oneof $ map return sampleFileNames
