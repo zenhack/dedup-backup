@@ -14,7 +14,8 @@
     You should have received a copy of the GNU General Public License
     along with this program. If not, see <http://www.gnu.org/licenses/>
 -}
-import System.Posix.Files
+import qualified System.Posix.Files as PF
+import qualified System.Posix.Types as PT
 import System.Directory (getDirectoryContents, createDirectoryIfMissing, doesFileExist)
 import Control.Monad (liftM, mapM_, unless)
 import qualified Crypto.Hash.SHA1 as SHA1
@@ -23,6 +24,33 @@ import qualified Data.ByteString.Base16 as Hex
 import Data.ByteString.Char8 (unpack)
 import System.Environment
 import Data.List (stripPrefix)
+
+
+-- This stuff exists for the testsuite's benift. When running the program, the
+-- only instance of FileStatus we ever use is PF.FileStatus, but we can't
+-- construct those, so we have our own type defined in the test suite for
+-- testing:
+
+class FileStatus a where
+    isRegularFile    :: a -> Bool
+    isDirectory      :: a -> Bool
+    isSymbolicLink   :: a -> Bool
+    fileMode         :: a -> PT.FileMode
+    fileOwner        :: a -> PT.UserID
+    fileGroup        :: a -> PT.GroupID
+    accessTime       :: a -> PT.EpochTime
+    modificationTime :: a -> PT.EpochTime
+
+instance FileStatus PF.FileStatus where
+    isRegularFile    = PF.isRegularFile
+    isDirectory      = PF.isDirectory
+    isSymbolicLink   = PF.isSymbolicLink
+    fileMode         = PF.fileMode
+    fileOwner        = PF.fileOwner
+    fileGroup        = PF.fileGroup
+    accessTime       = PF.accessTime
+    modificationTime = PF.modificationTime
+
 
 -- // from System.FilePath *almost* does what we want, but it drops left if
 -- right starts with a slash.
@@ -34,31 +62,31 @@ data JobSpec = JobSpec { src   :: FilePath
                        , prev  :: Maybe FilePath
                        }
 
-data FileTree = Directory FilePath FileStatus [FileTree]
-              | RegularFile FilePath FileStatus
-              | Symlink FilePath FileStatus
-              | Unsupported FilePath FileStatus
+data FileTree s = Directory FilePath s [FileTree s]
+                | RegularFile FilePath s
+                | Symlink FilePath s
+                | Unsupported FilePath s
 
-data Action = MkDir FilePath FileStatus [Action]
-            | MkSymlink FilePath FileStatus
-            | DedupCopy FilePath FileStatus
-            | Report String
+data Action s = MkDir FilePath s [Action s]
+              | MkSymlink FilePath s
+              | DedupCopy FilePath s
+              | Report String
 
 -- | @(pathMap f tree)@ applies @f@ to all @FilePath@s in @tree@, recursively.
-pathMap :: (FilePath -> FilePath) -> FileTree -> FileTree
+pathMap :: (FilePath -> FilePath) -> FileTree s -> FileTree s
 pathMap f (Directory path status contents) =
     Directory (f path) status (map (pathMap f) contents)
 pathMap f (RegularFile  path info) = RegularFile (f path) info
 pathMap f (Symlink      path info) = Symlink     (f path) info
 pathMap f (Unsupported  path info) = Unsupported (f path) info
 
-relativizePaths :: FilePath -> FileTree -> FileTree
+relativizePaths :: FilePath -> FileTree s -> FileTree s
 relativizePaths srcDir = pathMap stripSrcDir
   where stripSrcDir = (\(Just path) -> path) . (stripPrefix srcDir)
 
-lStatTree :: FilePath -> IO FileTree
+lStatTree :: FilePath -> IO (FileTree PF.FileStatus)
 lStatTree path = do
-    status <- getSymbolicLinkStatus path
+    status <- PF.getSymbolicLinkStatus path
     if isDirectory status then do
         rawContentsNames <- getDirectoryContents path
         let contentsNames = filter (`notElem` [".", ".."]) rawContentsNames
@@ -71,15 +99,15 @@ lStatTree path = do
     else
         return $ Unsupported path status
 
-doAction :: JobSpec -> Action -> IO ()
+doAction :: (FileStatus s) => JobSpec -> (Action s) -> IO ()
 doAction spec (MkDir path status contents) = do
     let path' = dest spec // path
     createDirectoryIfMissing True path'
     syncMetadata path' status
     mapM_ (doAction spec) contents
 doAction spec (MkSymlink path status) = do
-    target <- readSymbolicLink (src spec // path)
-    createSymbolicLink target (dest spec // path)
+    target <- PF.readSymbolicLink (src spec // path)
+    PF.createSymbolicLink target (dest spec // path)
     syncMetadata (dest spec // path) status
 doAction spec (DedupCopy path status) = do
     changed <- case prev spec of
@@ -88,7 +116,7 @@ doAction spec (DedupCopy path status) = do
             let prevpath' = prevpath // path
             exists <- doesFileExist prevpath'
             if exists then do
-                prevstatus <- getSymbolicLinkStatus prevpath'
+                prevstatus <- PF.getSymbolicLinkStatus prevpath'
                 return $ not (isRegularFile prevstatus) ||
                            (modificationTime prevstatus < modificationTime status)
             else return True
@@ -103,16 +131,16 @@ doAction spec (DedupCopy path status) = do
         -- make things more robust:
         have <- doesFileExist blobname
         unless have $ B.readFile srcpath >>= B.writeFile blobname
-        createLink blobname (dest spec // path)
+        PF.createLink blobname (dest spec // path)
       else do
         let Just prevpath = prev spec
-        createLink (prevpath // path) (dest spec // path)
+        PF.createLink (prevpath // path) (dest spec // path)
     syncMetadata (dest spec // path) status
 doAction _ (Report msg) = putStrLn msg
 
 
 
-mkAction :: FileTree -> Action
+mkAction :: (FileTree s) -> Action s
 mkAction (Directory path status contents) =
     MkDir path status (map mkAction contents)
 mkAction (Symlink path status) = MkSymlink path status
@@ -128,14 +156,14 @@ doBackup spec = do
     let action = mkAction relativeTree
     doAction spec action
 
-syncMetadata :: FilePath -> FileStatus -> IO ()
+syncMetadata :: (FileStatus s) => FilePath -> s -> IO ()
 syncMetadata path status = do
-    setSymbolicLinkOwnerAndGroup path (fileOwner status) (fileGroup status)
+    PF.setSymbolicLinkOwnerAndGroup path (fileOwner status) (fileGroup status)
     unless (isSymbolicLink status) $ do
         -- These act on the underlying file, and there are no symlink
         -- equivalents.
-        setFileMode path (fileMode status)
-        setFileTimes path (accessTime status) (modificationTime status)
+        PF.setFileMode path (fileMode status)
+        PF.setFileTimes path (accessTime status) (modificationTime status)
 
 main :: IO ()
 main = do
