@@ -5,7 +5,7 @@ import Data.UnixTime (UnixTime(..), toEpochTime)
 import qualified System.Posix.Files.ByteString as PFB
 import qualified System.Posix.Types as PT
 import qualified System.Posix.User as PU
-import qualified Main as Main
+import qualified Main
 import Main ((//))
 import Test.Framework
 import Test.QuickCheck.Arbitrary (Arbitrary, arbitrary)
@@ -16,7 +16,9 @@ import Test.QuickCheck.Gen (oneof)
 -- us have constants, rather than having to thread the IO monad through
 -- everything to get a value that's never going to change.
 import System.IO.Unsafe (unsafePerformIO)
+{-# NOINLINE effectiveUID #-}
 effectiveUID = unsafePerformIO PU.getEffectiveUserID
+{-# NOINLINE effectiveGID #-}
 effectiveGID = unsafePerformIO PU.getEffectiveGroupID
 
 -- handy to have an off-the-shelf time we can use.
@@ -45,7 +47,7 @@ data FileStatus = FileStatus { mode  :: PT.FileMode
                              }
 
 instance Arbitrary FileStatus where
-    arbitrary = do
+    arbitrary =
         FileStatus <$>     return PFB.ownerModes
                        <*> return effectiveUID
                        <*> return effectiveGID

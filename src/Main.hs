@@ -84,7 +84,7 @@ pathMap f (Unsupported  path info) = Unsupported (f path) info
 
 relativizePaths :: FilePath -> FileTree s -> FileTree s
 relativizePaths srcDir = pathMap stripSrcDir
-  where stripSrcDir = (\(Just path) -> path) . (stripPrefix srcDir)
+  where stripSrcDir = (\(Just path) -> path) . stripPrefix srcDir
 
 lStatTree :: FilePath -> IO (FileTree PF.FileStatus)
 lStatTree path = do
@@ -92,7 +92,7 @@ lStatTree path = do
     if isDirectory status then do
         rawContentsNames <- getDirectoryContents path
         let contentsNames = filter (`notElem` [".", ".."]) rawContentsNames
-        contents <- mapM lStatTree (map (path //) contentsNames)
+        contents <- mapM (lStatTree . (path //)) contentsNames
         return $ Directory path status contents
     else if isRegularFile status then
         return $ RegularFile path status
@@ -101,7 +101,7 @@ lStatTree path = do
     else
         return $ Unsupported path status
 
-doAction :: (FileStatus s) => JobSpec -> (Action s) -> IO ()
+doAction :: (FileStatus s) => JobSpec -> Action s -> IO ()
 doAction spec (MkDir path status contents) = do
     let path' = dest spec // path
     createDirectoryIfMissing True path'
@@ -142,7 +142,7 @@ doAction _ (Report msg) = putStrLn msg
 
 
 
-mkAction :: (FileTree s) -> Action s
+mkAction :: FileTree s -> Action s
 mkAction (Directory path status contents) =
     MkDir path status (map mkAction contents)
 mkAction (Symlink path status) = MkSymlink path status
