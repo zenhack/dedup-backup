@@ -16,10 +16,11 @@
 -}
 module Main where
 
+import qualified Data.Map.Strict as M
 import qualified System.Posix.Files as PF
 import qualified System.Posix.Types as PT
 import System.Directory (getDirectoryContents, createDirectoryIfMissing, doesFileExist)
-import Control.Monad (liftM, mapM_, unless)
+import Control.Monad (liftM, forM_, mapM_, unless)
 import qualified Crypto.Hash.SHA1 as SHA1
 import qualified Data.ByteString.Lazy as B
 import qualified Data.ByteString.Base16 as Hex
@@ -42,6 +43,7 @@ class FileStatus a where
     fileGroup        :: a -> PT.GroupID
     accessTime       :: a -> PT.EpochTime
     modificationTime :: a -> PT.EpochTime
+    fileSize         :: a -> PT.FileOffset
 
 instance FileStatus PF.FileStatus where
     isRegularFile    = PF.isRegularFile
@@ -52,6 +54,7 @@ instance FileStatus PF.FileStatus where
     fileGroup        = PF.fileGroup
     accessTime       = PF.accessTime
     modificationTime = PF.modificationTime
+    fileSize         = PF.fileSize
 
 
 -- // from System.FilePath *almost* does what we want, but it drops left if
@@ -64,27 +67,15 @@ data JobSpec = JobSpec { src   :: FilePath
                        , prev  :: Maybe FilePath
                        }
 
-data FileTree s = Directory FilePath s [FileTree s]
-                | RegularFile FilePath s
-                | Symlink FilePath s
-                | Unsupported FilePath s
+data FileTree s = Directory s (M.Map FilePath (FileTree s))
+                | RegularFile s
+                | Symlink s
+                | Unsupported s
 
-data Action s = MkDir FilePath s [Action s]
-              | MkSymlink FilePath s
-              | DedupCopy FilePath s
+data Action s = MkDir s (M.Map FilePath (Action s))
+              | MkSymlink s
+              | DedupCopy s
               | Report String
-
--- | @(pathMap f tree)@ applies @f@ to all @FilePath@s in @tree@, recursively.
-pathMap :: (FilePath -> FilePath) -> FileTree s -> FileTree s
-pathMap f (Directory path status contents) =
-    Directory (f path) status (map (pathMap f) contents)
-pathMap f (RegularFile  path info) = RegularFile (f path) info
-pathMap f (Symlink      path info) = Symlink     (f path) info
-pathMap f (Unsupported  path info) = Unsupported (f path) info
-
-relativizePaths :: FilePath -> FileTree s -> FileTree s
-relativizePaths srcDir = pathMap stripSrcDir
-  where stripSrcDir = (\(Just path) -> path) . stripPrefix srcDir
 
 lStatTree :: FilePath -> IO (FileTree PF.FileStatus)
 lStatTree path = do
@@ -92,70 +83,76 @@ lStatTree path = do
     if isDirectory status then do
         rawContentsNames <- getDirectoryContents path
         let contentsNames = filter (`notElem` [".", ".."]) rawContentsNames
-        contents <- mapM (lStatTree . (path //)) contentsNames
-        return $ Directory path status contents
+        contents <- mapM lStatTree contentsNames
+        return $ Directory
+                    status
+                    (M.fromList (zip contentsNames contents))
     else if isRegularFile status then
-        return $ RegularFile path status
+        return $ RegularFile status
     else if isSymbolicLink status then
-        return $ Symlink path status
+        return $ Symlink status
     else
-        return $ Unsupported path status
+        return $ Unsupported status
 
 doAction :: (FileStatus s) => JobSpec -> Action s -> IO ()
-doAction spec (MkDir path status contents) = do
-    let path' = dest spec // path
-    createDirectoryIfMissing True path'
-    syncMetadata path' status
-    mapM_ (doAction spec) contents
-doAction spec (MkSymlink path status) = do
-    target <- PF.readSymbolicLink (src spec // path)
-    PF.createSymbolicLink target (dest spec // path)
-    syncMetadata (dest spec // path) status
-doAction spec (DedupCopy path status) = do
+doAction spec (MkDir status contents) = do
+    let path = dest spec
+    createDirectoryIfMissing True path
+    syncMetadata path status
+    forM_ (M.toList contents)
+          (\(path, tree) ->
+                doAction
+                    spec { dest = dest spec // path
+                         , src = src spec // path
+                         , prev = fmap (// path) (prev spec)
+                         }
+                    tree)
+doAction spec (MkSymlink status) = do
+    target <- PF.readSymbolicLink (src spec)
+    PF.createSymbolicLink target (dest spec)
+    syncMetadata (dest spec) status
+doAction spec (DedupCopy status) = do
     changed <- case prev spec of
         Nothing -> return True
         Just prevpath -> do
-            let prevpath' = prevpath // path
-            exists <- doesFileExist prevpath'
+            exists <- doesFileExist prevpath
             if exists then do
-                prevstatus <- PF.getSymbolicLinkStatus prevpath'
+                prevstatus <- PF.getSymbolicLinkStatus prevpath
                 return $ not (isRegularFile prevstatus) ||
                            (modificationTime prevstatus < modificationTime status)
             else return True
     if changed
       then do
-        let srcpath = src spec // path
-        file <- B.readFile srcpath
+        file <- B.readFile (src spec)
         let blobname = blobs spec // unpack (Hex.encode $ SHA1.hashlazy file)
         -- TODO: We should do this in one step by opening blobname with
         -- O_CREATE | O_EXCL, which will eliminate a race condition. We don't
         -- actually guarantee anything about concurrency safety, but it would
         -- make things more robust:
         have <- doesFileExist blobname
-        unless have $ B.readFile srcpath >>= B.writeFile blobname
-        PF.createLink blobname (dest spec // path)
+        unless have $ B.readFile (src spec) >>= B.writeFile blobname
+        PF.createLink blobname (dest spec)
       else do
         let Just prevpath = prev spec
-        PF.createLink (prevpath // path) (dest spec // path)
-    syncMetadata (dest spec // path) status
-doAction _ (Report msg) = putStrLn msg
+        PF.createLink prevpath (dest spec)
+    syncMetadata (dest spec) status
+doAction spec (Report msg) = putStrLn (msg ++ show (src spec))
 
 
 
 mkAction :: FileTree s -> Action s
-mkAction (Directory path status contents) =
-    MkDir path status (map mkAction contents)
-mkAction (Symlink path status) = MkSymlink path status
-mkAction (RegularFile path status) = DedupCopy path status
-mkAction (Unsupported path _) =
-    Report $ "Ignoring file of unsupported type: " ++ show path
+mkAction (Directory status contents) =
+    MkDir status (M.map mkAction contents)
+mkAction (Symlink status) = MkSymlink status
+mkAction (RegularFile status) = DedupCopy status
+mkAction (Unsupported _) =
+    Report "Ignoring file of unsupported type: "
 
 doBackup :: JobSpec -> IO ()
 doBackup spec = do
     let srcDir = src spec
     srcTree <- lStatTree srcDir
-    let relativeTree = relativizePaths srcDir srcTree
-    let action = mkAction relativeTree
+    let action = mkAction srcTree
     doAction spec action
 
 syncMetadata :: (FileStatus s) => FilePath -> s -> IO ()

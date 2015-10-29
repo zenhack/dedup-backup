@@ -18,6 +18,7 @@ executable dedup-backup
   -- other-modules:
   -- other-extensions:
   build-depends:       base >=4.7 && <5.0,
+                       containers,
                        base16-bytestring,
                        bytestring,
                        cryptohash,
@@ -30,12 +31,14 @@ test-suite the-test-suite
   type: exitcode-stdio-1.0
   main-is: TestMain.hs
   build-depends:       base >=4.7 && <5.0,
+                       containers,
                        base16-bytestring,
                        bytestring,
                        cryptohash,
                        directory,
                        unix,
                        unix-time,
+                       Unixutils,
 
                       QuickCheck,
                       test-framework,
