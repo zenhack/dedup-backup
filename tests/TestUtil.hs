@@ -35,7 +35,7 @@ data FileStatus = FileStatus { mode  :: PT.FileMode
                              , atime :: PT.EpochTime
                              , ctime :: PT.EpochTime
                              , size  :: PT.FileOffset
-                             }
+                             } deriving(Show)
 
 instance Arbitrary FileStatus where
     arbitrary = do
@@ -111,6 +111,10 @@ instance Arbitrary (Main.FileTree FileStatus) where
             return $ Main.Symlink status
         else
             error "BUG: Unrecogized file type!"
+
+sameTree :: (Main.FileStatus a, Main.FileStatus b) =>
+    Main.FileTree a -> Main.FileTree b -> Bool
+sameTree _ _ = False -- Not yet implemented
 
 statusEq :: (Main.FileStatus a, Main.FileStatus b) => a -> b -> Bool
 statusEq l r = and [ Main.fileMode l         == Main.fileMode r

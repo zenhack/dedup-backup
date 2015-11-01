@@ -15,10 +15,13 @@ readThenWriteEq :: Property
 -- readThenWriteEq :: Main.FileTree FileStatus -> IO ()
 readThenWriteEq = monadicIO $ do
     tree <- pick arbitrary
-    return $ withTemporaryDirectory "testsuite.XXXXXX" (\path -> do
+    -- XXX TODO: we need this type annotation, but this is an awkward spot for
+    -- it:
+    let _ = tree :: (Main.FileTree FileStatus)
+    readBack <- run $ withTemporaryDirectory "testsuite.XXXXXX" (\path -> do
         writeTree (path // "src") tree
-        readBack <- Main.lStatTree (path // "src")
-        assert $ sameTree tree readBack)
+        Main.lStatTree (path // "src"))
+    assert $ sameTree tree readBack
 
 
 main :: IO ()
