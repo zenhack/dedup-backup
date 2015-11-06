@@ -1,5 +1,5 @@
 {-# LANGUAGE FlexibleInstances #-}
-module TestMain where
+module Main where
 
 import TestUtil
 import Test.Framework
