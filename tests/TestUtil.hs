@@ -114,7 +114,13 @@ instance Arbitrary (DDB.FileTree FileStatus) where
 
 sameTree :: (DDB.FileStatus a, DDB.FileStatus b) =>
     DDB.FileTree a -> DDB.FileTree b -> Bool
-sameTree _ _ = False -- Not yet implemented
+sameTree (DDB.Symlink s1)      (DDB.Symlink s2)      = statusEq s1 s2
+sameTree (DDB.RegularFile s1)  (DDB.RegularFile s2)  = statusEq s1 s2
+sameTree (DDB.Directory s1 c1) (DDB.Directory s2 c2) =
+    and $ (statusEq s1 s2):(zipWith sameContents (M.toAscList c1) (M.toAscList c2))
+  where
+    sameContents (k1, v1) (k2, v2) = k1 == k2 && (sameTree v2 v1)
+sameTree _ _ = False
 
 statusEq :: (DDB.FileStatus a, DDB.FileStatus b) => a -> b -> Bool
 statusEq l r = and [ DDB.fileMode l         == DDB.fileMode r
