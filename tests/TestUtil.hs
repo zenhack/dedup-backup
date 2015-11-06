@@ -9,7 +9,7 @@ import qualified System.Posix.Files.ByteString as PFB
 import qualified System.Posix.Files as PF
 import qualified System.Posix.Types as PT
 import qualified System.Posix.User as PU
-import qualified DedupBackup
+import qualified DedupBackup as DDB
 import DedupBackup ((//))
 import System.Directory (createDirectoryIfMissing)
 import Test.Framework
@@ -57,7 +57,7 @@ instance Arbitrary FileStatus where
 hasMode :: PT.FileMode -> PT.FileMode -> Bool
 hasMode all check = PFB.intersectFileModes all check == check
 
-instance DedupBackup.FileStatus FileStatus where
+instance DDB.FileStatus FileStatus where
     isRegularFile s  = hasMode (mode s) PFB.regularFileMode
     isDirectory s    = hasMode (mode s) PFB.directoryMode
     isSymbolicLink s = hasMode (mode s) PFB.symbolicLinkMode
@@ -82,45 +82,45 @@ mkName = oneof $ map return sampleFileNames
 -- * The contents of the file are all zeros, with a size matching that
 --   specified by the status.
 -- * Symlinks always link to "..".
-writeTree :: (DedupBackup.FileStatus s) => FilePath -> DedupBackup.FileTree s -> IO ()
-writeTree path (DedupBackup.Directory status contents) = do
+writeTree :: (DDB.FileStatus s) => FilePath -> DDB.FileTree s -> IO ()
+writeTree path (DDB.Directory status contents) = do
     createDirectoryIfMissing True path
     forM_ (M.toList contents) (\(name, subtree) ->
         writeTree (path // name) subtree)
-    DedupBackup.syncMetadata path status
-writeTree path (DedupBackup.RegularFile status) = do
-    let contents = B.pack $ take (fromIntegral $ DedupBackup.fileSize status) [0..]
+    DDB.syncMetadata path status
+writeTree path (DDB.RegularFile status) = do
+    let contents = B.pack $ take (fromIntegral $ DDB.fileSize status) [0..]
     B.writeFile path contents
-    DedupBackup.syncMetadata path status
-writeTree path (DedupBackup.Symlink status) = do
+    DDB.syncMetadata path status
+writeTree path (DDB.Symlink status) = do
     PF.createSymbolicLink ".." path
-    DedupBackup.syncMetadata path status
+    DDB.syncMetadata path status
 
 
-instance Arbitrary (DedupBackup.FileTree FileStatus) where
+instance Arbitrary (DDB.FileTree FileStatus) where
     arbitrary = do
         status <- arbitrary
-        if DedupBackup.isDirectory status then do
+        if DDB.isDirectory status then do
             contents <- arbitrary
-            return $ DedupBackup.Directory
+            return $ DDB.Directory
                         status
                         (M.fromList (zip sampleFileNames contents))
-        else if DedupBackup.isRegularFile status then
-            return $ DedupBackup.RegularFile status
-        else if DedupBackup.isSymbolicLink status then
-            return $ DedupBackup.Symlink status
+        else if DDB.isRegularFile status then
+            return $ DDB.RegularFile status
+        else if DDB.isSymbolicLink status then
+            return $ DDB.Symlink status
         else
             error "BUG: Unrecogized file type!"
 
-sameTree :: (DedupBackup.FileStatus a, DedupBackup.FileStatus b) =>
-    DedupBackup.FileTree a -> DedupBackup.FileTree b -> Bool
+sameTree :: (DDB.FileStatus a, DDB.FileStatus b) =>
+    DDB.FileTree a -> DDB.FileTree b -> Bool
 sameTree _ _ = False -- Not yet implemented
 
-statusEq :: (DedupBackup.FileStatus a, DedupBackup.FileStatus b) => a -> b -> Bool
-statusEq l r = and [ DedupBackup.fileMode l         == DedupBackup.fileMode r
-                   , DedupBackup.fileOwner l        == DedupBackup.fileOwner r
-                   , DedupBackup.fileGroup l        == DedupBackup.fileGroup r
-                   , DedupBackup.accessTime l       == DedupBackup.accessTime r
-                   , DedupBackup.modificationTime l == DedupBackup.modificationTime r
-                   , DedupBackup.fileSize l         == DedupBackup.fileSize r
+statusEq :: (DDB.FileStatus a, DDB.FileStatus b) => a -> b -> Bool
+statusEq l r = and [ DDB.fileMode l         == DDB.fileMode r
+                   , DDB.fileOwner l        == DDB.fileOwner r
+                   , DDB.fileGroup l        == DDB.fileGroup r
+                   , DDB.accessTime l       == DDB.accessTime r
+                   , DDB.modificationTime l == DDB.modificationTime r
+                   , DDB.fileSize l         == DDB.fileSize r
                    ]
