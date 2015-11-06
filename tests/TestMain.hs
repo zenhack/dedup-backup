@@ -24,4 +24,7 @@ readThenWriteEq = monadicIO $ do
 
 
 main :: IO ()
-main = defaultMain [ testProperty "???" readThenWriteEq ]
+main = defaultMain [ testProperty ("Writing a file tree to disk then " ++
+                                   "reading it back in yields equal trees")
+                                  readThenWriteEq
+                   ]
