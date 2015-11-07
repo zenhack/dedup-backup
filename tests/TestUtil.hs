@@ -3,6 +3,7 @@ module TestUtil where
 
 import Control.Monad (liftM, forM_)
 import Data.UnixTime (UnixTime(..), toEpochTime)
+import Data.Bits ((.&.), (.|.))
 import qualified Data.ByteString.Lazy as B
 import qualified Data.Map.Strict as M
 import qualified System.Posix.Files.ByteString as PFB
@@ -123,10 +124,12 @@ sameTree (DDB.Directory s1 c1) (DDB.Directory s2 c2) =
 sameTree _ _ = False
 
 statusEq :: (DDB.FileStatus a, DDB.FileStatus b) => a -> b -> Bool
-statusEq l r = and [ DDB.fileMode l         == DDB.fileMode r
-                   , DDB.fileOwner l        == DDB.fileOwner r
-                   , DDB.fileGroup l        == DDB.fileGroup r
-                   , DDB.accessTime l       == DDB.accessTime r
-                   , DDB.modificationTime l == DDB.modificationTime r
-                   , DDB.fileSize l         == DDB.fileSize r
+statusEq l r = and $ [ DDB.fileMode l      .&. (PFB.accessModes .|. PFB.fileTypeModes)
+                        == DDB.fileMode r .&. (PFB.accessModes .|. PFB.fileTypeModes)
+                     , DDB.fileOwner l        == DDB.fileOwner r
+                     , DDB.fileGroup l        == DDB.fileGroup r
+                     , DDB.accessTime l       == DDB.accessTime r
+                     , DDB.modificationTime l == DDB.modificationTime r
+                     , DDB.fileMode l .&. PFB.fileTypeModes == PFB.directoryMode
+                        || DDB.fileSize l == DDB.fileSize r
                    ]
