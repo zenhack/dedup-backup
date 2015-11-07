@@ -25,13 +25,14 @@ syncMetaDataEq = monadicIO $ do
             createDirectoryIfMissing True filename
         else if DDB.isRegularFile status then
             B.writeFile filename (B.pack [])
-        else if DDB.isSymbolicLink status then
-            PF.createSymbolicLink ".." filename
+        else if DDB.isSymbolicLink status then do
+            B.writeFile (filename ++ ".target") (B.pack [])
+            PF.createSymbolicLink (filename ++ ".target") filename
         else
             error "Unknown file type"
         DDB.syncMetadata filename status
         PF.getSymbolicLinkStatus filename)
-    assert $ statusEq status status'
+    assert $ assertSameStatus status status'
 
 
 
@@ -48,7 +49,7 @@ readThenWriteEq = monadicIO $ do
         createDirectoryIfMissing True path
         writeTree (path // "src") tree
         readBack <- DDB.lStatTree (path // "src")
-        let ok = sameTree tree readBack
+        let ok = tree == (mapStatus fromDDBFileStatus readBack)
         if ok then
             removeDirectoryRecursive path
         else

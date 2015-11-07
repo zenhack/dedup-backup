@@ -71,7 +71,7 @@ data FileTree s = Directory s (M.Map FilePath (FileTree s))
                 | RegularFile s
                 | Symlink s
                 | Unsupported s
-                deriving(Show)
+                deriving(Show,Eq)
 
 data Action s = MkDir s (M.Map FilePath (Action s))
               | MkSymlink s

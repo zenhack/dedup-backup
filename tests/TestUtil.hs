@@ -38,6 +38,22 @@ data FileStatus = FileStatus { mode  :: PT.FileMode
                              , size  :: PT.FileOffset
                              } deriving(Show)
 
+fromDDBFileStatus :: (DDB.FileStatus a) => a -> FileStatus
+fromDDBFileStatus s = FileStatus { mode  = DDB.fileMode s
+                                 , owner = DDB.fileOwner s
+                                 , group = DDB.fileGroup s
+                                 , atime = DDB.accessTime s
+                                 , ctime = DDB.modificationTime s
+                                 , size  = DDB.fileSize s
+                                 }
+
+assertSameStatus :: (DDB.FileStatus a, DDB.FileStatus b) => a -> b -> Bool
+assertSameStatus s1 s2 = if s1' == s2' then True else
+    error $ show s1' ++ "\n    /=\n"  ++ show s2'
+  where
+    s1' = fromDDBFileStatus s1
+    s2' = fromDDBFileStatus s2
+
 instance Arbitrary FileStatus where
     arbitrary = do
         rawStatus <- FileStatus <$>     return PFB.ownerModes
@@ -113,23 +129,20 @@ instance Arbitrary (DDB.FileTree FileStatus) where
         else
             error "BUG: Unrecogized file type!"
 
-sameTree :: (DDB.FileStatus a, DDB.FileStatus b) =>
-    DDB.FileTree a -> DDB.FileTree b -> Bool
-sameTree (DDB.Symlink s1)      (DDB.Symlink s2)      = statusEq s1 s2
-sameTree (DDB.RegularFile s1)  (DDB.RegularFile s2)  = statusEq s1 s2
-sameTree (DDB.Directory s1 c1) (DDB.Directory s2 c2) =
-    and $ (statusEq s1 s2):(zipWith sameContents (M.toAscList c1) (M.toAscList c2))
-  where
-    sameContents (k1, v1) (k2, v2) = k1 == k2 && (sameTree v2 v1)
-sameTree _ _ = False
+-- We could make a functor instance, but it's not incredibly natural for the
+-- FileStatus to be the "value" per se, and we don't really need the generality.
+mapStatus :: (a -> b) -> DDB.FileTree a -> DDB.FileTree b
+mapStatus f (DDB.Symlink s) = DDB.Symlink (f s)
+mapStatus f (DDB.RegularFile s) = DDB.RegularFile (f s)
+mapStatus f (DDB.Directory s c) = DDB.Directory (f s) (M.map (mapStatus f) c)
 
-statusEq :: (DDB.FileStatus a, DDB.FileStatus b) => a -> b -> Bool
-statusEq l r = and $ [ DDB.fileMode l      .&. (PFB.accessModes .|. PFB.fileTypeModes)
+instance Eq FileStatus where
+    l == r = and $ [ DDB.fileMode l      .&. (PFB.accessModes .|. PFB.fileTypeModes)
                         == DDB.fileMode r .&. (PFB.accessModes .|. PFB.fileTypeModes)
-                     , DDB.fileOwner l        == DDB.fileOwner r
-                     , DDB.fileGroup l        == DDB.fileGroup r
-                     , DDB.accessTime l       == DDB.accessTime r
-                     , DDB.modificationTime l == DDB.modificationTime r
-                     , DDB.fileMode l .&. PFB.fileTypeModes == PFB.directoryMode
-                        || DDB.fileSize l == DDB.fileSize r
+                   , DDB.fileOwner l        == DDB.fileOwner r
+                   , DDB.fileGroup l        == DDB.fileGroup r
+                   , DDB.accessTime l       == DDB.accessTime r
+                   , DDB.modificationTime l == DDB.modificationTime r
+                   , DDB.fileMode l .&. PFB.fileTypeModes == PFB.directoryMode
+                      || DDB.fileSize l == DDB.fileSize r
                    ]
