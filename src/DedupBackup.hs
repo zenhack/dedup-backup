@@ -101,11 +101,11 @@ doAction spec (MkDir status contents) = do
     createDirectoryIfMissing True path
     syncMetadata path status
     forM_ (M.toList contents)
-          (\(path, tree) ->
+          (\(path', tree) ->
                 doAction
-                    spec { dest = dest spec // path
-                         , src = src spec // path
-                         , prev = fmap (// path) (prev spec)
+                    spec { dest = dest spec // path'
+                         , src = src spec // path'
+                         , prev = fmap (// path') (prev spec)
                          }
                     tree)
 doAction spec (MkSymlink status) = do
