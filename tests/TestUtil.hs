@@ -89,7 +89,7 @@ writeTree path (DDB.Directory status contents) = do
         writeTree (path // name) subtree)
     DDB.syncMetadata path status
 writeTree path (DDB.RegularFile status) = do
-    let contents = B.pack $ take (fromIntegral $ DDB.fileSize status) [0..]
+    let contents = B.pack $ replicate (fromIntegral $ DDB.fileSize status) 0
     B.writeFile path contents
     DDB.syncMetadata path status
 writeTree path (DDB.Symlink status) = do
