@@ -36,8 +36,8 @@ syncMetadataEq = monadicIO $ do
 
 
 
-readThenWriteEq :: Property
-readThenWriteEq = monadicIO $ do
+writeThenReadEq :: Property
+writeThenReadEq = monadicIO $ do
     tree <- pick arbitrary
     -- XXX TODO: we need this type annotation, but this is an awkward spot for
     -- it:
@@ -53,5 +53,5 @@ main = defaultMain [ testProperty "syncMetadata path status; lstat path == statu
                                   syncMetadataEq
                    , testProperty ("Writing a file tree to disk then " ++
                                    "reading it back in yields equal trees")
-                                  readThenWriteEq
+                                  writeThenReadEq
                    ]
