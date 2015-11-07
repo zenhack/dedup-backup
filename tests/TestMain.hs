@@ -15,8 +15,8 @@ import System.Directory (createDirectoryIfMissing, removeDirectoryRecursive)
 import qualified Data.ByteString.Lazy as B
 import qualified System.Posix.Files as PF
 
-syncMetaDataEq :: Property
-syncMetaDataEq = monadicIO $ do
+syncMetadataEq :: Property
+syncMetadataEq = monadicIO $ do
     status <- pick arbitrary
     let _ = status :: FileStatus
     status' <- run $ withTemporaryDirectory "testsuite.XXXXXX" (\path -> do
@@ -50,7 +50,7 @@ readThenWriteEq = monadicIO $ do
 
 main :: IO ()
 main = defaultMain [ testProperty "syncMetadata path status; lstat path == status"
-                                  syncMetaDataEq
+                                  syncMetadataEq
                    , testProperty ("Writing a file tree to disk then " ++
                                    "reading it back in yields equal trees")
                                   readThenWriteEq
