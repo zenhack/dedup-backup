@@ -131,12 +131,16 @@ mapStatus f (DDB.RegularFile s) = DDB.RegularFile (f s)
 mapStatus f (DDB.Directory s c) = DDB.Directory (f s) (M.map (mapStatus f) c)
 
 instance Eq FileStatus where
-    l == r = and $ [ DDB.fileMode l      .&. (PFB.accessModes .|. PFB.fileTypeModes)
-                        == DDB.fileMode r .&. (PFB.accessModes .|. PFB.fileTypeModes)
-                   , DDB.fileOwner l        == DDB.fileOwner r
-                   , DDB.fileGroup l        == DDB.fileGroup r
-                   , DDB.accessTime l       == DDB.accessTime r
-                   , DDB.modificationTime l == DDB.modificationTime r
-                   , DDB.fileMode l .&. PFB.fileTypeModes == PFB.directoryMode
-                      || DDB.fileSize l == DDB.fileSize r
+    l == r = and $ [ fileType l == fileType r
+                   , DDB.fileOwner l == DDB.fileOwner r
+                   , DDB.fileGroup l == DDB.fileGroup r
+                   , DDB.isSymbolicLink l ||
+                        and [ access l == access r
+                            , DDB.modificationTime l == DDB.modificationTime r
+                            , DDB.accessTime l == DDB.accessTime r
+                            ]
+                   , DDB.isDirectory l || DDB.fileSize l == DDB.fileSize r
                    ]
+        where
+          access status = DDB.fileMode status .&. PFB.accessModes
+          fileType status = DDB.fileMode status .&. PFB.fileTypeModes
