@@ -56,7 +56,7 @@ instance Arbitrary FileStatus where
       where maxFileSize = 32 * 1024
 
 hasMode :: PT.FileMode -> PT.FileMode -> Bool
-hasMode all check = PFB.intersectFileModes all check == check
+hasMode all check = all .&. check /= 0
 
 instance DDB.FileStatus FileStatus where
     isRegularFile s  = hasMode (mode s) PFB.regularFileMode
