@@ -6,25 +6,48 @@ import Test.Framework
 import Test.Framework.Providers.QuickCheck2
 import Test.QuickCheck.Monadic
 import Test.QuickCheck (arbitrary, Property)
-import qualified DedupBackup
+import qualified DedupBackup as DDB
 import DedupBackup ((//))
 
 import System.Unix.Directory (withTemporaryDirectory)
 import System.Directory (createDirectoryIfMissing, removeDirectoryRecursive)
+
+import qualified Data.ByteString.Lazy as B
+import qualified System.Posix.Files as PF
+
+syncMetaDataEq :: Property
+syncMetaDataEq = monadicIO $ do
+    status <- pick arbitrary
+    let _ = status :: FileStatus
+    status' <- run $ withTemporaryDirectory "testsuite.XXXXXX" (\path -> do
+        let filename = path // "testfile"
+        if DDB.isDirectory status then
+            createDirectoryIfMissing True filename
+        else if DDB.isRegularFile status then
+            B.writeFile filename (B.pack [])
+        else if DDB.isSymbolicLink status then
+            PF.createSymbolicLink ".." filename
+        else
+            error "Unknown file type"
+        DDB.syncMetadata filename status
+        PF.getSymbolicLinkStatus filename)
+    assert $ statusEq status status'
+
+
 
 readThenWriteEq :: Property
 readThenWriteEq = monadicIO $ do
     tree <- pick arbitrary
     -- XXX TODO: we need this type annotation, but this is an awkward spot for
     -- it:
-    let _ = tree :: (DedupBackup.FileTree FileStatus)
+    let _ = tree :: (DDB.FileTree FileStatus)
 --    readBack <- run $ withTemporaryDirectory "testsuite.XXXXXX" (\path -> do
  --   readBack <- run $ do
     ok <- run $ do
         let path = "/tmp/foo/bar"
         createDirectoryIfMissing True path
         writeTree (path // "src") tree
-        readBack <- DedupBackup.lStatTree (path // "src")
+        readBack <- DDB.lStatTree (path // "src")
         let ok = sameTree tree readBack
         if ok then
             removeDirectoryRecursive path
@@ -36,7 +59,9 @@ readThenWriteEq = monadicIO $ do
 
 
 main :: IO ()
-main = defaultMain [ testProperty ("Writing a file tree to disk then " ++
+main = defaultMain [ testProperty "syncMetadata path status; lstat path == status"
+                                  syncMetaDataEq
+                   , testProperty ("Writing a file tree to disk then " ++
                                    "reading it back in yields equal trees")
                                   readThenWriteEq
                    ]
