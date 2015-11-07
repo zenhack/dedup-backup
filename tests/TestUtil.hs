@@ -47,12 +47,9 @@ fromDDBFileStatus s = FileStatus { mode  = DDB.fileMode s
                                  , size  = DDB.fileSize s
                                  }
 
-assertSameStatus :: (DDB.FileStatus a, DDB.FileStatus b) => a -> b -> Bool
-assertSameStatus s1 s2 = if s1' == s2' then True else
-    error $ show s1' ++ "\n    /=\n"  ++ show s2'
-  where
-    s1' = fromDDBFileStatus s1
-    s2' = fromDDBFileStatus s2
+assertSame :: (Eq a, Show a) => a -> a -> Bool
+assertSame x y = if x == y then True else
+    error $ show x ++ "\n    /=\n"  ++ show y
 
 instance Arbitrary FileStatus where
     arbitrary = do

@@ -31,8 +31,8 @@ syncMetaDataEq = monadicIO $ do
         else
             error "Unknown file type"
         DDB.syncMetadata filename status
-        PF.getSymbolicLinkStatus filename)
-    assert $ assertSameStatus status status'
+        fromDDBFileStatus <$> PF.getSymbolicLinkStatus filename)
+    assert $ assertSame status status'
 
 
 
@@ -48,13 +48,12 @@ readThenWriteEq = monadicIO $ do
         let path = "/tmp/foo/bar"
         createDirectoryIfMissing True path
         writeTree (path // "src") tree
-        readBack <- DDB.lStatTree (path // "src")
-        let ok = tree == (mapStatus fromDDBFileStatus readBack)
-        if ok then
+        readBack <- mapStatus fromDDBFileStatus <$> DDB.lStatTree (path // "src")
+        if tree == readBack then
             removeDirectoryRecursive path
         else
             return ()
-        return ok
+        return (assertSame tree readBack)
     assert ok
 --    assert $ sameTree tree readBack
 
