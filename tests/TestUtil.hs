@@ -27,9 +27,6 @@ effectiveUID = unsafePerformIO PU.getEffectiveUserID
 {-# NOINLINE effectiveGID #-}
 effectiveGID = unsafePerformIO PU.getEffectiveGroupID
 
--- handy to have an off-the-shelf time we can use.
-epoch1 = toEpochTime (UnixTime 1 0)
-
 data FileStatus = FileStatus { mode  :: PT.FileMode
                              , owner :: PT.UserID
                              , group :: PT.GroupID
@@ -56,8 +53,8 @@ instance Arbitrary FileStatus where
         rawStatus <- FileStatus <$>     return PFB.ownerModes
                                     <*> return effectiveUID
                                     <*> return effectiveGID
-                                    <*> return epoch1
-                                    <*> return epoch1
+                                    <*> return 0
+                                    <*> return 0
                                     <*> liftM
                                             (fromInteger . (`mod` maxFileSize))
                                             arbitrary
