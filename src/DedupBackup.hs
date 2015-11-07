@@ -84,7 +84,7 @@ lStatTree path = do
     if isDirectory status then do
         rawContentsNames <- getDirectoryContents path
         let contentsNames = filter (`notElem` [".", ".."]) rawContentsNames
-        contents <- mapM lStatTree contentsNames
+        contents <- mapM (lStatTree . (path //))  contentsNames
         return $ Directory
                     status
                     (M.fromList (zip contentsNames contents))
