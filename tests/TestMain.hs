@@ -42,20 +42,10 @@ readThenWriteEq = monadicIO $ do
     -- XXX TODO: we need this type annotation, but this is an awkward spot for
     -- it:
     let _ = tree :: (DDB.FileTree FileStatus)
---    readBack <- run $ withTemporaryDirectory "testsuite.XXXXXX" (\path -> do
- --   readBack <- run $ do
-    ok <- run $ do
-        let path = "/tmp/foo/bar"
-        createDirectoryIfMissing True path
+    readBack <- run $ withTemporaryDirectory "testsuite.XXXXXX" (\path -> do
         writeTree (path // "src") tree
-        readBack <- mapStatus fromDDBFileStatus <$> DDB.lStatTree (path // "src")
-        if tree == readBack then
-            removeDirectoryRecursive path
-        else
-            return ()
-        return (assertSame tree readBack)
-    assert ok
---    assert $ sameTree tree readBack
+        mapStatus fromDDBFileStatus <$> DDB.lStatTree (path // "src"))
+    assert $ assertSame tree readBack
 
 
 main :: IO ()
