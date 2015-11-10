@@ -37,7 +37,6 @@ test-suite the-test-suite
                        cryptohash,
                        directory,
                        unix,
-                       unix-time,
                        Unixutils,
 
                       QuickCheck,

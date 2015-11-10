@@ -2,7 +2,6 @@
 module TestUtil where
 
 import Control.Monad (liftM, forM_)
-import Data.UnixTime (UnixTime(..), toEpochTime)
 import Data.Bits ((.&.), (.|.))
 import qualified Data.ByteString.Lazy as B
 import qualified Data.Map.Strict as M
