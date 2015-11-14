@@ -30,7 +30,9 @@ syncMetadataEq = monadicIO $ do
         if DDB.isDirectory status then
             createDirectoryIfMissing True filename
         else if DDB.isRegularFile status then
-            B.writeFile filename (B.pack [])
+            B.writeFile
+                filename
+                (B.pack $ replicate (fromIntegral $ size status) 0)
         else if DDB.isSymbolicLink status then do
             B.writeFile (filename ++ ".target") (B.pack [])
             PF.createSymbolicLink (testFilename ++ ".target") filename
