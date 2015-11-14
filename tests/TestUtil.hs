@@ -54,14 +54,19 @@ instance Arbitrary FileStatus where
                                     <*> return effectiveGID
                                     <*> return 0
                                     <*> return 0
-                                    <*> liftM
-                                            (fromInteger . (`mod` maxFileSize))
-                                            arbitrary
+                                    <*> return 0
         typeMode <- oneof $ map return [ PFB.directoryMode
                                        , PFB.regularFileMode
                                        , PFB.symbolicLinkMode
                                        ]
-        return rawStatus { mode = PFB.unionFileModes (mode rawStatus) typeMode }
+        sizeNum <- arbitrary
+        let size = if typeMode == PFB.symbolicLinkMode then
+                fromInteger ((sizeNum `mod` 64) + 1)
+            else
+                fromInteger (sizeNum `mod` maxFileSize)
+        return rawStatus { mode = PFB.unionFileModes (mode rawStatus) typeMode
+                         , size = size
+                         }
       where maxFileSize = 32 * 1024
 
 instance DDB.FileStatus FileStatus where
@@ -88,7 +93,8 @@ mkName = oneof $ map return sampleFileNames
 --
 -- * The contents of the file are all zeros, with a size matching that
 --   specified by the status.
--- * Symlinks always link to "..".
+-- * Symlinks always link to a file whose name consists of '#' characters,
+--   and is of the right length to match the status's size.
 writeTree :: (DDB.FileStatus s) => FilePath -> DDB.FileTree s -> IO ()
 writeTree path (DDB.Directory status contents) = do
     createDirectoryIfMissing True path
@@ -100,7 +106,8 @@ writeTree path (DDB.RegularFile status) = do
     B.writeFile path contents
     DDB.syncMetadata path status
 writeTree path (DDB.Symlink status) = do
-    PF.createSymbolicLink ".." path
+    let targetName = replicate (fromIntegral $ DDB.fileSize status) '#'
+    PF.createSymbolicLink targetName path
     DDB.syncMetadata path status
 
 
