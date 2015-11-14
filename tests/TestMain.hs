@@ -45,7 +45,6 @@ syncMetadataEq = monadicIO $ do
     testFilename = "testfile"
 
 
-
 writeThenReadEq :: Property
 writeThenReadEq = monadicIO $ do
     tree <- pick arbitrary
@@ -54,14 +53,34 @@ writeThenReadEq = monadicIO $ do
     let _ = tree :: (DDB.FileTree FileStatus)
     readBack <- run $ withTemporaryDirectory "testsuite.XXXXXX" (\path -> do
         writeTree (path // "src") tree
-        mapStatus fromDDBFileStatus <$> DDB.lStatTree (path // "src"))
+        lStatTree (path // "src"))
     assert $ assertSame tree readBack
 
+copyEq :: Property
+copyEq = monadicIO $ do
+    tree <- pick arbitrary
+    let _ = tree :: (DDB.FileTree FileStatus)
+    run $ withTemporaryDirectory "testsuite.XXXXXX" (\path -> do
+        writeTree (path // "src") tree
+        createDirectoryIfMissing True (path // "blobs")
+        DDB.doBackup $ DDB.JobSpec { DDB.src   = path // "src"
+                                   , DDB.dest  = path // "dest"
+                                   , DDB.blobs = path // "blobs"
+                                   , DDB.prev  = Nothing
+                                   }
+        srcTree  <- lStatTree (path // "src")
+        destTree <- lStatTree (path // "dest")
+        return $ assertSame srcTree destTree)
 
 main :: IO ()
-main = defaultMain [ testProperty "syncMetadata path status; lstat path == status"
-                                  syncMetadataEq
-                   , testProperty ("Writing a file tree to disk then " ++
-                                   "reading it back in yields equal trees")
-                                  writeThenReadEq
+main = defaultMain [ testProperty
+                        "syncMetadata path status; lstat path == status"
+                        syncMetadataEq
+                   , testProperty
+                        ("Writing a file tree to disk then reading it " ++
+                         "back in yields equal trees")
+                        writeThenReadEq
+                   , testProperty
+                        "Doing a backup of a clean tree makes an equal copy."
+                        copyEq
                    ]

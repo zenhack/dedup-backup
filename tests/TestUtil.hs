@@ -43,6 +43,9 @@ fromDDBFileStatus s = FileStatus { mode  = DDB.fileMode s
                                  , size  = DDB.fileSize s
                                  }
 
+lStatTree :: String -> IO (DDB.FileTree FileStatus)
+lStatTree path = mapStatus fromDDBFileStatus <$> DDB.lStatTree path
+
 assertSame :: (Eq a, Show a) => a -> a -> Bool
 assertSame x y = if x == y then True else
     error $ show x ++ "\n    /=\n"  ++ show y
