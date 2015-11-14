@@ -64,13 +64,10 @@ instance Arbitrary FileStatus where
         return rawStatus { mode = PFB.unionFileModes (mode rawStatus) typeMode }
       where maxFileSize = 32 * 1024
 
-hasMode :: PT.FileMode -> PT.FileMode -> Bool
-hasMode all check = all .&. check /= 0
-
 instance DDB.FileStatus FileStatus where
-    isRegularFile s  = hasMode (mode s) PFB.regularFileMode
-    isDirectory s    = hasMode (mode s) PFB.directoryMode
-    isSymbolicLink s = hasMode (mode s) PFB.symbolicLinkMode
+    isRegularFile s  = PFB.fileTypeModes .&. (mode s) == PFB.regularFileMode
+    isDirectory s    = PFB.fileTypeModes .&. (mode s) == PFB.directoryMode
+    isSymbolicLink s = PFB.fileTypeModes .&. (mode s) == PFB.symbolicLinkMode
     fileMode         = mode
     fileOwner        = owner
     fileGroup        = group
