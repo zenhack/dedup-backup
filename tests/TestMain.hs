@@ -72,6 +72,33 @@ copyEq = monadicIO $ do
         destTree <- lStatTree (path // "dest")
         return $ assertSame srcTree destTree)
 
+cTimeCopyEq :: Property
+cTimeCopyEq = monadicIO $ do
+    tree <- pick arbitrary
+    patch <- pick arbitrary
+    let _ = tree :: (DDB.FileTree FileStatus)
+    run $ withTemporaryDirectory "testsuite.XXXXXX" (\path -> do
+        writeTree (path // "src") tree
+        createDirectoryIfMissing True (path // "blobs")
+        DDB.doBackup $ DDB.JobSpec { DDB.src   = path // "src"
+                                   , DDB.dest  = path // "dest/1"
+                                   , DDB.blobs = path // "blobs"
+                                   , DDB.prev  = Nothing
+                                   }
+        srcTree1 <- lStatTree (path // "src")
+        applyPatch patch (path // "src")
+        srcTree2 <- lStatTree (path // "src")
+        DDB.doBackup $ DDB.JobSpec { DDB.src   = path // "src"
+                                   , DDB.dest  = path // "dest/2"
+                                   , DDB.blobs = path // "blobs"
+                                   , DDB.prev  = Just (path // "dest/1")
+                                   }
+        destTree1 <- lStatTree (path // "dest/1")
+        destTree2 <- lStatTree (path // "dest/2")
+        return $ assertSame srcTree1 destTree1
+        return $ assertSame srcTree2 destTree2)
+
+
 main :: IO ()
 main = defaultMain [ testProperty
                         "syncMetadata path status; lstat path == status"
@@ -83,4 +110,8 @@ main = defaultMain [ testProperty
                    , testProperty
                         "Doing a backup of a clean tree makes an equal copy."
                         copyEq
+                   , testProperty
+                        ("Doing an incremental  backup with a prev backup " ++
+                         "makes a correct copy.")
+                        cTimeCopyEq
                    ]

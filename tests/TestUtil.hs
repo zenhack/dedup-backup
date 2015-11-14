@@ -11,7 +11,10 @@ import qualified System.Posix.Types as PT
 import qualified System.Posix.User as PU
 import qualified DedupBackup as DDB
 import DedupBackup ((//))
-import System.Directory (createDirectoryIfMissing)
+import System.Directory (
+    createDirectoryIfMissing,
+    removeDirectoryRecursive,
+    getDirectoryContents)
 import Test.Framework
 import Test.QuickCheck.Arbitrary (Arbitrary, arbitrary)
 import Test.QuickCheck.Gen (oneof)
@@ -25,6 +28,33 @@ import System.IO.Unsafe (unsafePerformIO)
 effectiveUID = unsafePerformIO PU.getEffectiveUserID
 {-# NOINLINE effectiveGID #-}
 effectiveGID = unsafePerformIO PU.getEffectiveGroupID
+
+data Patch = Replace (DDB.FileTree FileStatus)
+           | Keep
+           | Descend Int Patch
+           deriving(Show)
+
+
+instance Arbitrary Patch where
+    arbitrary = oneof [ Replace <$> arbitrary
+                      , return Keep
+                      , Descend <$> arbitrary <*> arbitrary
+                      ]
+
+
+applyPatch :: Patch -> FilePath -> IO ()
+applyPatch Keep _ = return ()
+applyPatch (Replace tree) path = do
+    removeDirectoryRecursive path
+    writeTree path tree
+applyPatch (Descend n patch) path = do
+    status <- PF.getSymbolicLinkStatus path
+    if DDB.isDirectory status then do
+        contents <- getDirectoryContents path
+        let child = contents !! (n `mod` length contents)
+        applyPatch patch (path // child)
+    else
+        return ()
 
 data FileStatus = FileStatus { mode  :: PT.FileMode
                              , owner :: PT.UserID
