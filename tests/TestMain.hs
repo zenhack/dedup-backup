@@ -18,21 +18,29 @@ import qualified System.Posix.Files as PF
 syncMetadataEq :: Property
 syncMetadataEq = monadicIO $ do
     status <- pick arbitrary
+    let useStatus = if DDB.isSymbolicLink status then
+        -- The size of a symbolic link is the length of the name of its target,
+        -- so we need to set this accordingly:
+            status { size = fromIntegral $ length (testFilename ++ ".target") }
+        else
+            status
     let _ = status :: FileStatus
     status' <- run $ withTemporaryDirectory "testsuite.XXXXXX" (\path -> do
-        let filename = path // "testfile"
+        let filename = path // testFilename
         if DDB.isDirectory status then
             createDirectoryIfMissing True filename
         else if DDB.isRegularFile status then
             B.writeFile filename (B.pack [])
         else if DDB.isSymbolicLink status then do
             B.writeFile (filename ++ ".target") (B.pack [])
-            PF.createSymbolicLink (filename ++ ".target") filename
+            PF.createSymbolicLink (testFilename ++ ".target") filename
         else
             error "Unknown file type"
         DDB.syncMetadata filename status
         fromDDBFileStatus <$> PF.getSymbolicLinkStatus filename)
-    assert $ assertSame status status'
+    assert $ assertSame useStatus status'
+  where
+    testFilename = "testfile"
 
 
 
