@@ -80,6 +80,7 @@ cTimeCopyEq = monadicIO $ do
     run $ withTemporaryDirectory "testsuite.XXXXXX" (\path -> do
         writeTree (path // "src") tree
         createDirectoryIfMissing True (path // "blobs")
+        createDirectoryIfMissing True (path // "dest")
         DDB.doBackup $ DDB.JobSpec { DDB.src   = path // "src"
                                    , DDB.dest  = path // "dest/1"
                                    , DDB.blobs = path // "blobs"
