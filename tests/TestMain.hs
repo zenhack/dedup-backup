@@ -10,7 +10,7 @@ import qualified DedupBackup as DDB
 import DedupBackup ((//))
 
 import System.Unix.Directory (withTemporaryDirectory)
-import System.Directory (createDirectoryIfMissing, removeDirectoryRecursive)
+import System.Directory (createDirectoryIfMissing)
 
 import qualified Data.ByteString.Lazy as B
 import qualified System.Posix.Files as PF
