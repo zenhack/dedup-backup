@@ -14,6 +14,7 @@ import DedupBackup ((//))
 import System.Directory (
     createDirectoryIfMissing,
     removeDirectoryRecursive,
+    removeFile,
     getDirectoryContents)
 import Test.Framework
 import Test.QuickCheck.Arbitrary (Arbitrary, arbitrary)
@@ -45,7 +46,11 @@ instance Arbitrary Patch where
 applyPatch :: Patch -> FilePath -> IO ()
 applyPatch Keep _ = return ()
 applyPatch (Replace tree) path = do
-    removeDirectoryRecursive path
+    status <- PF.getSymbolicLinkStatus path
+    if PF.isDirectory status then
+        removeDirectoryRecursive path
+    else
+        removeFile path
     writeTree path tree
 applyPatch (Descend n patch) path = do
     status <- PF.getSymbolicLinkStatus path

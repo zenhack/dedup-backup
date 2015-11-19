@@ -78,6 +78,7 @@ cTimeCopyEq = monadicIO $ do
     patch <- pick arbitrary
     let _ = tree :: (DDB.FileTree FileStatus)
     run $ withTemporaryDirectory "testsuite.XXXXXX" (\path -> do
+        putStrLn "Starting test cTimeCopyEq"
         writeTree (path // "src") tree
         createDirectoryIfMissing True (path // "blobs")
         createDirectoryIfMissing True (path // "dest")
@@ -104,6 +105,7 @@ main :: IO ()
 main = defaultMain [ testProperty
                         "syncMetadata path status; lstat path == status"
                         syncMetadataEq
+{-
                    , testProperty
                         ("Writing a file tree to disk then reading it " ++
                          "back in yields equal trees")
@@ -111,6 +113,7 @@ main = defaultMain [ testProperty
                    , testProperty
                         "Doing a backup of a clean tree makes an equal copy."
                         copyEq
+-}
                    , testProperty
                         ("Doing an incremental  backup with a prev backup " ++
                          "makes a correct copy.")
