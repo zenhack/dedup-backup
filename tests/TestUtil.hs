@@ -56,7 +56,7 @@ applyPatch (Replace tree) path = do
 applyPatch (Descend n patch) path = do
     status <- PF.getSymbolicLinkStatus path
     if DDB.isDirectory status then do
-        contents <- getDirectoryContents path
+        contents <- DDB.getContentsNames path
         let child = contents !! (n `mod` length contents)
         applyPatch patch (path // child)
     else

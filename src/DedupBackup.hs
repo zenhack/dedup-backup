@@ -78,12 +78,17 @@ data Action s = MkDir s (M.Map FilePath (Action s))
               | DedupCopy s
               | Report String
 
+-- | @getContentNames@ is like @getDirectoryContents@, except that it excludes
+-- "." and "..".
+getContentsNames :: FilePath -> IO [FilePath]
+getContentsNames path =
+    filter (`notElem` [".", ".."]) <$> getDirectoryContents path
+
 lStatTree :: FilePath -> IO (FileTree PF.FileStatus)
 lStatTree path = do
     status <- PF.getSymbolicLinkStatus path
     if isDirectory status then do
-        rawContentsNames <- getDirectoryContents path
-        let contentsNames = filter (`notElem` [".", ".."]) rawContentsNames
+        contentsNames <- getContentsNames path
         contents <- mapM (lStatTree . (path //))  contentsNames
         return $ Directory
                     status
