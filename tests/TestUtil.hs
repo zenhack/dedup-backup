@@ -55,14 +55,12 @@ applyPatch (Replace tree) path = do
     writeTree path tree
 applyPatch (Descend n patch) path = do
     status <- PF.getSymbolicLinkStatus path
-    if DDB.isDirectory status then do
-        contents <- DDB.getContentsNames path
-        let len = length contents
-        when (len > 0) $ do
-            let child = contents !! (n `mod` len)
-            applyPatch patch (path // child)
-    else
-        return ()
+    when (DDB.isDirectory status) $ do
+         contents <- DDB.getContentsNames path
+         let len = length contents
+         when (len > 0) $ do
+             let child = contents !! (n `mod` len)
+             applyPatch patch (path // child)
 
 data FileStatus = FileStatus { mode  :: PT.FileMode
                              , owner :: PT.UserID
@@ -111,9 +109,9 @@ instance Arbitrary FileStatus where
       where maxFileSize = 32 * 1024
 
 instance DDB.FileStatus FileStatus where
-    isRegularFile s  = PFB.fileTypeModes .&. (mode s) == PFB.regularFileMode
-    isDirectory s    = PFB.fileTypeModes .&. (mode s) == PFB.directoryMode
-    isSymbolicLink s = PFB.fileTypeModes .&. (mode s) == PFB.symbolicLinkMode
+    isRegularFile s  = PFB.fileTypeModes .&. mode s == PFB.regularFileMode
+    isDirectory s    = PFB.fileTypeModes .&. mode s == PFB.directoryMode
+    isSymbolicLink s = PFB.fileTypeModes .&. mode s == PFB.symbolicLinkMode
     fileMode         = mode
     fileOwner        = owner
     fileGroup        = group
@@ -157,7 +155,7 @@ testPath = "testsuite.XXXXXX"
 instance Arbitrary (DDB.FileTree FileStatus) where
     -- Make sure we don't make trees that are too deep. The -10 is a somewhat
     -- arbitrary amount of extra padding:
-    arbitrary = arbitrary' $ pathMax - (length $ "/tmp/" ++ testPath) - 10
+    arbitrary = arbitrary' $ pathMax - length ("/tmp/" ++ testPath) - 10
       where
         arbitrary' maxlen = do
             status <- arbitrary
@@ -169,7 +167,7 @@ instance Arbitrary (DDB.FileTree FileStatus) where
                                 if maxlen <= 2 then
                                     []
                                 else
-                                    (zip sampleFileNames contents))
+                                    zip sampleFileNames contents)
             else if DDB.isRegularFile status then
                 return $ DDB.RegularFile status
             else if DDB.isSymbolicLink status then
@@ -188,16 +186,16 @@ mapStatus f (DDB.RegularFile s) = DDB.RegularFile (f s)
 mapStatus f (DDB.Directory s c) = DDB.Directory (f s) (M.map (mapStatus f) c)
 
 instance Eq FileStatus where
-    l == r = and $ [ fileType l == fileType r
-                   , DDB.fileOwner l == DDB.fileOwner r
-                   , DDB.fileGroup l == DDB.fileGroup r
-                   , DDB.isSymbolicLink l ||
-                        and [ access l == access r
-                            , DDB.modificationTime l == DDB.modificationTime r
-                            , DDB.accessTime l == DDB.accessTime r
-                            ]
-                   , DDB.isDirectory l || DDB.fileSize l == DDB.fileSize r
-                   ]
+    l == r = and [ fileType l == fileType r
+                 , DDB.fileOwner l == DDB.fileOwner r
+                 , DDB.fileGroup l == DDB.fileGroup r
+                 , DDB.isSymbolicLink l ||
+                      and [ access l == access r
+                          , DDB.modificationTime l == DDB.modificationTime r
+                          , DDB.accessTime l == DDB.accessTime r
+                          ]
+                 , DDB.isDirectory l || DDB.fileSize l == DDB.fileSize r
+                 ]
         where
           access status = DDB.fileMode status .&. PFB.accessModes
           fileType status = DDB.fileMode status .&. PFB.fileTypeModes

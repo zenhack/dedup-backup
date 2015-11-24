@@ -63,11 +63,11 @@ copyEq = monadicIO $ do
     run $ withTemporaryDirectory testPath (\path -> do
         writeTree (path // "src") tree
         createDirectoryIfMissing True (path // "blobs")
-        DDB.doBackup $ DDB.JobSpec { DDB.src   = path // "src"
-                                   , DDB.dest  = path // "dest"
-                                   , DDB.blobs = path // "blobs"
-                                   , DDB.prev  = Nothing
-                                   }
+        DDB.doBackup DDB.JobSpec { DDB.src   = path // "src"
+                                 , DDB.dest  = path // "dest"
+                                 , DDB.blobs = path // "blobs"
+                                 , DDB.prev  = Nothing
+                                 }
         srcTree  <- lStatTree (path // "src")
         destTree <- lStatTree (path // "dest")
         return $ assertSame srcTree destTree)
@@ -81,19 +81,19 @@ cTimeCopyEq = monadicIO $ do
         writeTree (path // "src") tree
         createDirectoryIfMissing True (path // "blobs")
         createDirectoryIfMissing True (path // "dest")
-        DDB.doBackup $ DDB.JobSpec { DDB.src   = path // "src"
-                                   , DDB.dest  = path // "dest/1"
-                                   , DDB.blobs = path // "blobs"
-                                   , DDB.prev  = Nothing
-                                   }
+        DDB.doBackup DDB.JobSpec { DDB.src   = path // "src"
+                                 , DDB.dest  = path // "dest/1"
+                                 , DDB.blobs = path // "blobs"
+                                 , DDB.prev  = Nothing
+                                 }
         srcTree1 <- lStatTree (path // "src")
         applyPatch patch (path // "src")
         srcTree2 <- lStatTree (path // "src")
-        DDB.doBackup $ DDB.JobSpec { DDB.src   = path // "src"
-                                   , DDB.dest  = path // "dest/2"
-                                   , DDB.blobs = path // "blobs"
-                                   , DDB.prev  = Just (path // "dest/1")
-                                   }
+        DDB.doBackup DDB.JobSpec { DDB.src   = path // "src"
+                                 , DDB.dest  = path // "dest/2"
+                                 , DDB.blobs = path // "blobs"
+                                 , DDB.prev  = Just (path // "dest/1")
+                                 }
         destTree1 <- lStatTree (path // "dest/1")
         destTree2 <- lStatTree (path // "dest/2")
         return $ assertSame srcTree1 destTree1
