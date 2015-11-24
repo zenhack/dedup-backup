@@ -25,7 +25,7 @@ syncMetadataEq = monadicIO $ do
         else
             status
     let _ = status :: FileStatus
-    status' <- run $ withTemporaryDirectory "testsuite.XXXXXX" (\path -> do
+    status' <- run $ withTemporaryDirectory testPath (\path -> do
         let filename = path // testFilename
         if DDB.isDirectory status then
             createDirectoryIfMissing True filename
@@ -51,7 +51,7 @@ writeThenReadEq = monadicIO $ do
     -- XXX TODO: we need this type annotation, but this is an awkward spot for
     -- it:
     let _ = tree :: (DDB.FileTree FileStatus)
-    readBack <- run $ withTemporaryDirectory "testsuite.XXXXXX" (\path -> do
+    readBack <- run $ withTemporaryDirectory testPath (\path -> do
         writeTree (path // "src") tree
         lStatTree (path // "src"))
     assert $ assertSame tree readBack
@@ -60,7 +60,7 @@ copyEq :: Property
 copyEq = monadicIO $ do
     tree <- pick arbitrary
     let _ = tree :: (DDB.FileTree FileStatus)
-    run $ withTemporaryDirectory "testsuite.XXXXXX" (\path -> do
+    run $ withTemporaryDirectory testPath (\path -> do
         writeTree (path // "src") tree
         createDirectoryIfMissing True (path // "blobs")
         DDB.doBackup $ DDB.JobSpec { DDB.src   = path // "src"
@@ -77,8 +77,7 @@ cTimeCopyEq = monadicIO $ do
     tree <- pick arbitrary
     patch <- pick arbitrary
     let _ = tree :: (DDB.FileTree FileStatus)
-    run $ withTemporaryDirectory "testsuite.XXXXXX" (\path -> do
-        putStrLn "Starting test cTimeCopyEq"
+    run $ withTemporaryDirectory testPath (\path -> do
         writeTree (path // "src") tree
         createDirectoryIfMissing True (path // "blobs")
         createDirectoryIfMissing True (path // "dest")
@@ -105,7 +104,6 @@ main :: IO ()
 main = defaultMain [ testProperty
                         "syncMetadata path status; lstat path == status"
                         syncMetadataEq
-{-
                    , testProperty
                         ("Writing a file tree to disk then reading it " ++
                          "back in yields equal trees")
@@ -113,7 +111,6 @@ main = defaultMain [ testProperty
                    , testProperty
                         "Doing a backup of a clean tree makes an equal copy."
                         copyEq
--}
                    , testProperty
                         ("Doing an incremental  backup with a prev backup " ++
                          "makes a correct copy.")

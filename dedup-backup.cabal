@@ -38,6 +38,7 @@ test-suite the-test-suite
                        directory,
                        unix,
                        Unixutils,
+                       posix-paths,
 
                       QuickCheck,
                       test-framework,

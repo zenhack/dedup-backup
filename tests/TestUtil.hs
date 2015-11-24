@@ -9,6 +9,7 @@ import qualified System.Posix.Files.ByteString as PFB
 import qualified System.Posix.Files as PF
 import qualified System.Posix.Types as PT
 import qualified System.Posix.User as PU
+import System.Posix.Directory.Foreign (pathMax)
 import qualified DedupBackup as DDB
 import DedupBackup ((//))
 import System.Directory (
@@ -149,20 +150,33 @@ writeTree path (DDB.Symlink status) = do
     DDB.syncMetadata path status
 
 
+testPath = "testsuite.XXXXXX"
+
 instance Arbitrary (DDB.FileTree FileStatus) where
-    arbitrary = do
-        status <- arbitrary
-        if DDB.isDirectory status then do
-            contents <- arbitrary
-            return $ DDB.Directory
-                        status
-                        (M.fromList (zip sampleFileNames contents))
-        else if DDB.isRegularFile status then
-            return $ DDB.RegularFile status
-        else if DDB.isSymbolicLink status then
-            return $ DDB.Symlink status
-        else
-            error "BUG: Unrecogized file type!"
+    -- Make sure we don't make trees that are too deep. The -10 is a somewhat
+    -- arbitrary amount of extra padding:
+    arbitrary = arbitrary' $ pathMax - (length $ "/tmp/" ++ testPath) - 10
+      where
+        arbitrary' maxlen = do
+            status <- arbitrary
+            if DDB.isDirectory status then do
+                contents <- arbitraryList (maxlen - 2) -- descending into e.g. a/...
+                return $ DDB.Directory
+                            status
+                            (M.fromList $
+                                if maxlen <= 2 then
+                                    []
+                                else
+                                    (zip sampleFileNames contents))
+            else if DDB.isRegularFile status then
+                return $ DDB.RegularFile status
+            else if DDB.isSymbolicLink status then
+                return $ DDB.Symlink status
+            else
+                error "BUG: Unrecogized file type!"
+        arbitraryList maxlen = oneof [ return []
+                                     , (:) <$> arbitrary' maxlen <*> arbitraryList maxlen
+                                     ]
 
 -- We could make a functor instance, but it's not incredibly natural for the
 -- FileStatus to be the "value" per se, and we don't really need the generality.
