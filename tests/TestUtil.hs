@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 module TestUtil where
 
-import Control.Monad (liftM, forM_)
+import Control.Monad (liftM, forM_, when)
 import Data.Bits ((.&.), (.|.))
 import qualified Data.ByteString.Lazy as B
 import qualified Data.Map.Strict as M
@@ -57,8 +57,10 @@ applyPatch (Descend n patch) path = do
     status <- PF.getSymbolicLinkStatus path
     if DDB.isDirectory status then do
         contents <- DDB.getContentsNames path
-        let child = contents !! (n `mod` length contents)
-        applyPatch patch (path // child)
+        let len = length contents
+        when (len > 0) $ do
+            let child = contents !! (n `mod` len)
+            applyPatch patch (path // child)
     else
         return ()
 
