@@ -14,6 +14,7 @@ import System.Directory (createDirectoryIfMissing)
 
 import qualified Data.ByteString.Lazy as B
 import qualified System.Posix.Files as PF
+import qualified Data.Map.Strict as M
 
 syncMetadataEq :: Property
 syncMetadataEq = monadicIO $ do
@@ -100,6 +101,15 @@ cTimeCopyEq = monadicIO $ do
         return $ assertSame srcTree2 destTree2)
 
 
+sizeCutOffActions :: DDB.FileTree FileStatus -> Bool
+sizeCutOffActions tree = case (DDB.mkAction tree, tree) of
+    (DDB.NaiveCopy _, DDB.RegularFile status) -> DDB.fileSize status <= DDB.dedupCutOff
+    (DDB.DedupCopy _, DDB.RegularFile status) -> DDB.fileSize status >  DDB.dedupCutOff
+    (_, DDB.Directory _ contents) ->
+        and . (map snd) . M.toList $ M.map sizeCutOffActions contents
+    _ -> True
+
+
 main :: IO ()
 main = defaultMain [ testProperty
                         "syncMetadata path status; lstat path == status"
@@ -115,4 +125,8 @@ main = defaultMain [ testProperty
                         ("Doing an incremental  backup with a prev backup " ++
                          "makes a correct copy.")
                         cTimeCopyEq
+                   , testProperty
+                        ("The file size cutoff for deduplication vs not is " ++
+                         "respected.")
+                        sizeCutOffActions
                    ]

@@ -29,6 +29,10 @@ import System.Environment
 import Data.List (stripPrefix)
 
 
+dedupCutOff = 128 -- | number of bytes under which a file is just copied wholesale.
+                  -- Anything bigger than this gets the fancy dedup treatment.
+
+
 -- This stuff exists for the testsuite's benift. When running the program, the
 -- only instance of FileStatus we ever use is PF.FileStatus, but we can't
 -- construct those, so we have our own type defined in the test suite for
@@ -76,6 +80,7 @@ data FileTree s = Directory s (M.Map FilePath (FileTree s))
 data Action s = MkDir s (M.Map FilePath (Action s))
               | MkSymlink s
               | DedupCopy s
+              | NaiveCopy s
               | Report String
 
 -- | @getContentNames@ is like @getDirectoryContents@, except that it excludes
@@ -142,15 +147,22 @@ doAction spec (DedupCopy status) = do
         let Just prevpath = prev spec
         PF.createLink prevpath (dest spec)
     syncMetadata (dest spec) status
+doAction spec (NaiveCopy status) = do
+    B.readFile (src spec) >>= B.writeFile (dest spec)
+    syncMetadata (dest spec) status
 doAction spec (Report msg) = putStrLn (msg ++ show (src spec))
 
 
 
-mkAction :: FileTree s -> Action s
+mkAction :: (FileStatus s) => FileTree s -> Action s
 mkAction (Directory status contents) =
     MkDir status (M.map mkAction contents)
 mkAction (Symlink status) = MkSymlink status
-mkAction (RegularFile status) = DedupCopy status
+mkAction (RegularFile status) =
+    if fileSize status > dedupCutOff then
+        DedupCopy status
+    else
+        NaiveCopy status
 mkAction (Unsupported _) =
     Report "Ignoring file of unsupported type: "
 
