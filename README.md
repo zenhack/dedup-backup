@@ -38,6 +38,6 @@ current version of `<src>` will be used to speed up the backup --- if
 the modification times are the same the file is assumed to be unchanged,
 and will not be hashed.
 
-# License.
+# License
 
 GPL 3.0 or later.
