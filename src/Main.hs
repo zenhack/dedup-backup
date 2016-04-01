@@ -24,6 +24,10 @@ argParser = JobSpec <$>
        <> metavar "BLOB DIR"
        <> help "Blob directory"
         )
+    <*> switch
+        ( long "chown"
+       <> help "Change ownership on backup (requires root)"
+        )
     <*> (optional $ strOption
         ( long "prev"
        <> short 'p'

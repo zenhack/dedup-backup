@@ -44,21 +44,21 @@ instance Arbitrary Patch where
                       ]
 
 
-applyPatch :: Patch -> FilePath -> IO ()
-applyPatch Keep _ = return ()
-applyPatch (Replace tree) path = do
+applyPatch :: Bool -> Patch -> FilePath -> IO ()
+applyPatch _ Keep _ = return ()
+applyPatch shouldChown (Replace tree) path = do
     status <- PF.getSymbolicLinkStatus path
     if PF.isDirectory status then
         removeDirectoryRecursive path
     else
         removeFile path
-    writeTree path tree
-applyPatch (Descend n patch) path = do
+    writeTree shouldChown path tree
+applyPatch shouldChown (Descend n patch) path = do
     status <- PF.getSymbolicLinkStatus path
     if DDB.isDirectory status then do
         contents <- getDirectoryContents path
         let child = contents !! (n `mod` length contents)
-        applyPatch patch (path // child)
+        applyPatch shouldChown patch (path // child)
     else
         return ()
 
@@ -134,20 +134,20 @@ mkName = oneof $ map return sampleFileNames
 --   specified by the status.
 -- * Symlinks always link to a file whose name consists of '#' characters,
 --   and is of the right length to match the status's size.
-writeTree :: (DDB.FileStatus s) => FilePath -> DDB.FileTree s -> IO ()
-writeTree path (DDB.Directory status contents) = do
+writeTree :: (DDB.FileStatus s) => Bool -> FilePath -> DDB.FileTree s -> IO ()
+writeTree shouldChown path (DDB.Directory status contents) = do
     createDirectoryIfMissing True path
     forM_ (M.toList contents) (\(name, subtree) ->
-        writeTree (path // name) subtree)
-    DDB.syncMetadata path status
-writeTree path (DDB.RegularFile status) = do
+        writeTree shouldChown (path // name) subtree)
+    DDB.syncMetadata shouldChown path status
+writeTree shouldChown path (DDB.RegularFile status) = do
     let contents = B.pack $ replicate (fromIntegral $ DDB.fileSize status) 0
     B.writeFile path contents
-    DDB.syncMetadata path status
-writeTree path (DDB.Symlink status) = do
+    DDB.syncMetadata shouldChown path status
+writeTree shouldChown path (DDB.Symlink status) = do
     let targetName = replicate (fromIntegral $ DDB.fileSize status) '#'
     PF.createSymbolicLink targetName path
-    DDB.syncMetadata path status
+    DDB.syncMetadata shouldChown path status
 
 
 testPath = "testsuite.XXXXXX"
