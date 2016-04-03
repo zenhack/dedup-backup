@@ -19,6 +19,7 @@ import qualified Data.Map.Strict as M
 syncMetadataEq :: Property
 syncMetadataEq = monadicIO $ do
     status <- pick arbitrary
+    shouldChown <- pick arbitrary
     let useStatus = if DDB.isSymbolicLink status then
         -- The size of a symbolic link is the length of the name of its target,
         -- so we need to set this accordingly:
@@ -39,7 +40,7 @@ syncMetadataEq = monadicIO $ do
             PF.createSymbolicLink (testFilename ++ ".target") filename
         else
             error "Unknown file type"
-        DDB.syncMetadata filename status
+        DDB.syncMetadata shouldChown filename status
         fromDDBFileStatus <$> PF.getSymbolicLinkStatus filename)
     assert $ assertSame useStatus status'
   where
@@ -49,24 +50,27 @@ syncMetadataEq = monadicIO $ do
 writeThenReadEq :: Property
 writeThenReadEq = monadicIO $ do
     tree <- pick arbitrary
+    shouldChown <- pick arbitrary
     -- XXX TODO: we need this type annotation, but this is an awkward spot for
     -- it:
     let _ = tree :: (DDB.FileTree FileStatus)
     readBack <- run $ withTemporaryDirectory testPath (\path -> do
-        writeTree (path // "src") tree
+        writeTree shouldChown (path // "src") tree
         lStatTree (path // "src"))
     assert $ assertSame tree readBack
 
 copyEq :: Property
 copyEq = monadicIO $ do
     tree <- pick arbitrary
+    shouldChown <- pick arbitrary
     let _ = tree :: (DDB.FileTree FileStatus)
     run $ withTemporaryDirectory testPath (\path -> do
-        writeTree (path // "src") tree
+        writeTree shouldChown (path // "src") tree
         createDirectoryIfMissing True (path // "blobs")
         DDB.doBackup DDB.JobSpec { DDB.src   = path // "src"
                                  , DDB.dest  = path // "dest"
                                  , DDB.blobs = path // "blobs"
+                                 , DDB.chown = shouldChown
                                  , DDB.prev  = Nothing
                                  }
         srcTree  <- lStatTree (path // "src")
@@ -77,22 +81,25 @@ cTimeCopyEq :: Property
 cTimeCopyEq = monadicIO $ do
     tree <- pick arbitrary
     patch <- pick arbitrary
+    shouldChown <- pick arbitrary
     let _ = tree :: (DDB.FileTree FileStatus)
     run $ withTemporaryDirectory testPath (\path -> do
-        writeTree (path // "src") tree
+        writeTree shouldChown (path // "src") tree
         createDirectoryIfMissing True (path // "blobs")
         createDirectoryIfMissing True (path // "dest")
         DDB.doBackup DDB.JobSpec { DDB.src   = path // "src"
                                  , DDB.dest  = path // "dest/1"
                                  , DDB.blobs = path // "blobs"
+                                 , DDB.chown = shouldChown
                                  , DDB.prev  = Nothing
                                  }
         srcTree1 <- lStatTree (path // "src")
-        applyPatch patch (path // "src")
+        applyPatch shouldChown patch (path // "src")
         srcTree2 <- lStatTree (path // "src")
         DDB.doBackup DDB.JobSpec { DDB.src   = path // "src"
                                  , DDB.dest  = path // "dest/2"
                                  , DDB.blobs = path // "blobs"
+                                 , DDB.chown = shouldChown
                                  , DDB.prev  = Just (path // "dest/1")
                                  }
         destTree1 <- lStatTree (path // "dest/1")

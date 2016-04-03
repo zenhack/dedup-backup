@@ -20,7 +20,7 @@ import qualified Data.Map.Strict as M
 import qualified System.Posix.Files as PF
 import qualified System.Posix.Types as PT
 import System.Directory (getDirectoryContents, createDirectoryIfMissing, doesFileExist)
-import Control.Monad (liftM, forM_, mapM_, unless)
+import Control.Monad (liftM, forM_, mapM_, unless, when)
 import qualified Crypto.Hash.SHA1 as SHA1
 import qualified Data.ByteString.Lazy as B
 import qualified Data.ByteString.Base16 as Hex
@@ -68,6 +68,7 @@ instance FileStatus PF.FileStatus where
 data JobSpec = JobSpec { src   :: FilePath
                        , dest  :: FilePath
                        , blobs :: FilePath
+                       , chown :: Bool
                        , prev  :: Maybe FilePath
                        }
 
@@ -109,7 +110,7 @@ doAction :: (FileStatus s) => JobSpec -> Action s -> IO ()
 doAction spec (MkDir status contents) = do
     let path = dest spec
     createDirectoryIfMissing True path
-    syncMetadata path status
+    syncMetadata (chown spec) path status
     forM_ (M.toList contents)
           (\(path', tree) ->
                 doAction
@@ -121,7 +122,7 @@ doAction spec (MkDir status contents) = do
 doAction spec (MkSymlink status) = do
     target <- PF.readSymbolicLink (src spec)
     PF.createSymbolicLink target (dest spec)
-    syncMetadata (dest spec) status
+    syncMetadata (chown spec) (dest spec) status
 doAction spec (DedupCopy status) = do
     changed <- case prev spec of
         Nothing -> return True
@@ -146,10 +147,10 @@ doAction spec (DedupCopy status) = do
       else do
         let Just prevpath = prev spec
         PF.createLink prevpath (dest spec)
-    syncMetadata (dest spec) status
+    syncMetadata (chown spec) (dest spec) status
 doAction spec (NaiveCopy status) = do
     B.readFile (src spec) >>= B.writeFile (dest spec)
-    syncMetadata (dest spec) status
+    syncMetadata (chown spec) (dest spec) status
 doAction spec (Report msg) = putStrLn (msg ++ show (src spec))
 
 
@@ -173,19 +174,12 @@ doBackup spec = do
     let action = mkAction srcTree
     doAction spec action
 
-syncMetadata :: (FileStatus s) => FilePath -> s -> IO ()
-syncMetadata path status = do
-    PF.setSymbolicLinkOwnerAndGroup path (fileOwner status) (fileGroup status)
+syncMetadata :: (FileStatus s) => Bool -> FilePath -> s -> IO ()
+syncMetadata shouldChown path status = do
+    when shouldChown $ do
+        PF.setSymbolicLinkOwnerAndGroup path (fileOwner status) (fileGroup status)
     unless (isSymbolicLink status) $ do
         -- These act on the underlying file, and there are no symlink
         -- equivalents.
         PF.setFileMode path (fileMode status)
         PF.setFileTimes path (accessTime status) (modificationTime status)
-
-main :: IO ()
-main = do
-    args <- getArgs
-    case args of
-        [src, dest, blobs] -> doBackup $ JobSpec src dest blobs Nothing
-        [src, dest, blobs, prev] -> doBackup $ JobSpec src dest blobs (Just prev)
-        _ -> putStrLn "Usage : backup <src> <dest> <blobs> [ <prev> ]"
