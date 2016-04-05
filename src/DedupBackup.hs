@@ -181,8 +181,10 @@ mkAction (Unsupported _) =
 doBackup :: JobSpec -> IO ()
 doBackup spec = do
     let srcDir = src spec
+    putStrLn "Scanning source directory..."
     srcTree <- lStatTree srcDir
     let action = mkAction srcTree
+    putStrLn "Starting backup..."
     doAction spec action
 
 syncMetadata :: (FileStatus s) => Bool -> FilePath -> s -> IO ()
