@@ -20,6 +20,7 @@ import qualified Data.Map.Strict as M
 import qualified System.Posix.Files as PF
 import qualified System.Posix.Types as PT
 import System.Directory (getDirectoryContents, createDirectoryIfMissing, doesFileExist)
+import Control.Exception (try, IOException)
 import Control.Monad (liftM, forM_, mapM_, unless, when)
 import qualified Crypto.Hash.SHA1 as SHA1
 import qualified Data.ByteString.Lazy as B
@@ -84,6 +85,16 @@ data Action s = MkDir s (M.Map FilePath (Action s))
               | NaiveCopy s
               | Report String
 
+
+reportError :: IO () -> IO ()
+-- ^ @reportError io@ executes @e@. if @e@ raises an @IOException@, the
+-- exception is caught and printed, before resuming normal operation.
+reportError io = do
+    result <- (try io) :: IO (Either IOException ())
+    case result of
+        Left err -> print err
+        Right () -> return ()
+
 -- | @getContentNames@ is like @getDirectoryContents@, except that it excludes
 -- "." and "..".
 getContentsNames :: FilePath -> IO [FilePath]
@@ -107,7 +118,7 @@ lStatTree path = do
         return $ Unsupported status
 
 doAction :: (FileStatus s) => JobSpec -> Action s -> IO ()
-doAction spec (MkDir status contents) = do
+doAction spec (MkDir status contents) = reportError $ do
     let path = dest spec
     createDirectoryIfMissing True path
     syncMetadata (chown spec) path status
@@ -119,11 +130,11 @@ doAction spec (MkDir status contents) = do
                          , prev = fmap (// path') (prev spec)
                          }
                     tree)
-doAction spec (MkSymlink status) = do
+doAction spec (MkSymlink status) = reportError $ do
     target <- PF.readSymbolicLink (src spec)
     PF.createSymbolicLink target (dest spec)
     syncMetadata (chown spec) (dest spec) status
-doAction spec (DedupCopy status) = do
+doAction spec (DedupCopy status) = reportError $ do
     changed <- case prev spec of
         Nothing -> return True
         Just prevpath -> do
@@ -148,7 +159,7 @@ doAction spec (DedupCopy status) = do
         let Just prevpath = prev spec
         PF.createLink prevpath (dest spec)
     syncMetadata (chown spec) (dest spec) status
-doAction spec (NaiveCopy status) = do
+doAction spec (NaiveCopy status) = reportError $ do
     B.readFile (src spec) >>= B.writeFile (dest spec)
     syncMetadata (chown spec) (dest spec) status
 doAction spec (Report msg) = putStrLn (msg ++ show (src spec))
