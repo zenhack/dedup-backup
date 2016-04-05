@@ -26,17 +26,24 @@ Via cabal, Haskell's package manager:
 
 # Usage
 
-    dedup-backup <src> <dest> <blobs> [ <prev> ]
+    dedup-backup (-s|--src SOURCE) (-d|--dest DESTINATION)
+                 (-b|--blobs BLOB DIR) [--chown] [-p|--prev PREVIOUS]
 
-`<src>` is the directory to back up. `<dest>` is the location of the
-backup. `<blobs>` is a directory used to store files by cryptographic
-hash; it is used for de-duplication. This directory should be the same
-for all backups, and it *must* be on the same partition as `<dest>`.
-`<prev>` is an (optional) previous backup of the same `<src>` If
-specified, the modification times of the files in `<prev>` and the
-current version of `<src>` will be used to speed up the backup --- if
-the modification times are the same the file is assumed to be unchanged,
-and will not be hashed.
+`SOURCE` is the directory to back up. `DESTINATION` is the location of
+the backup. `BLOB DIR` is a directory used to store files by
+cryptographic hash; it is used for de-duplication. This directory should
+be the same for all backups, and it *must* be on the same partition as
+`DESTINATION`.
+
+`PREVIOUS` is an (optional) previous backup of the same `SOURCE` If
+specified, the modification times of the files in `PREVIOUS`
+and the current version of `SOURCE` will be used to speed up the backup
+--- if the modification times are the same the file is assumed to be
+unchanged, and will not be hashed.
+
+The `--chown` option tells `dedup-backup` to change the owner and group
+on the files in `DESTIONATION` to match those in `SOURCE`. Root access
+is required for this option.
 
 # License
 
