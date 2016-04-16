@@ -42,7 +42,7 @@ and the current version of `SOURCE` will be used to speed up the backup
 unchanged, and will not be hashed.
 
 The `--chown` option tells `dedup-backup` to change the owner and group
-on the files in `DESTIONATION` to match those in `SOURCE`. Root access
+on the files in `DESTINATION` to match those in `SOURCE`. Root access
 is required for this option.
 
 # License
