@@ -87,7 +87,7 @@ data Action s = MkDir s (M.Map FilePath (Action s))
 
 
 reportError :: IO () -> IO ()
--- ^ @reportError io@ executes @e@. if @e@ raises an @IOException@, the
+-- ^ @reportError io@ executes @io@. if @io@ raises an @IOException@, the
 -- exception is caught and printed, before resuming normal operation.
 reportError io = do
     result <- (try io) :: IO (Either IOException ())
