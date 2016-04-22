@@ -19,6 +19,8 @@ module DedupBackup where
 import qualified Data.Map.Strict as M
 import qualified System.Posix.Files as PF
 import qualified System.Posix.Types as PT
+import qualified System.Posix.IO as PIO
+import System.IO (hClose)
 import System.Directory (getDirectoryContents, createDirectoryIfMissing, doesFileExist)
 import Control.Exception (try, IOException)
 import Control.Monad (liftM, forM_, mapM_, unless, when)
@@ -148,12 +150,15 @@ doAction spec (DedupCopy status) = reportError $ do
       then do
         file <- B.readFile (src spec)
         let blobname = blobs spec // unpack (Hex.encode $ SHA1.hashlazy file)
-        -- TODO: We should do this in one step by opening blobname with
-        -- O_CREATE | O_EXCL, which will eliminate a race condition. We don't
-        -- actually guarantee anything about concurrency safety, but it would
-        -- make things more robust:
-        have <- doesFileExist blobname
-        unless have $ B.readFile (src spec) >>= B.writeFile blobname
+        (try :: IO a -> IO (Either IOException a)) $ do
+            fd <- PIO.openFd
+                    blobname
+                    PIO.WriteOnly
+                    (Just $ PT.CMode 0600)
+                    PIO.defaultFileFlags { PIO.exclusive = True }
+            hndl <- PIO.fdToHandle fd
+            B.readFile (src spec) >>= B.hPut hndl
+            hClose hndl
         PF.createLink blobname (dest spec)
       else do
         let Just prevpath = prev spec
