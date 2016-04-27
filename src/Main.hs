@@ -1,6 +1,7 @@
 module Main (main) where
 
 import DedupBackup (JobSpec(..), doBackup)
+import ConvertVersion (ensureLatestFormat)
 import Options.Applicative
 
 
@@ -43,4 +44,5 @@ parseArgs = execParser $
 main :: IO ()
 main = do
     spec <- parseArgs
+    ensureLatestFormat (blobs spec)
     doBackup spec

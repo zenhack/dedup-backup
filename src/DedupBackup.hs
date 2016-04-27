@@ -149,7 +149,8 @@ doAction spec (DedupCopy status) = reportError $ do
     if changed
       then do
         file <- B.readFile (src spec)
-        let blobname = blobs spec // unpack (Hex.encode $ SHA1.hashlazy file)
+        let hashname@(c1:c2:_) = unpack (Hex.encode $ SHA1.hashlazy file)
+        let blobname = blobs spec // [c1,c2] // hashname
         (try :: IO a -> IO (Either IOException a)) $ do
             fd <- PIO.openFd
                     blobname
