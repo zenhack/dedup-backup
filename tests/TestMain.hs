@@ -8,6 +8,7 @@ import Test.QuickCheck.Monadic
 import Test.QuickCheck (arbitrary, Property)
 import qualified DedupBackup as DDB
 import DedupBackup ((//))
+import ConvertVersion (ensureLatestFormat)
 
 import System.Unix.Directory (withTemporaryDirectory)
 import System.Directory (createDirectoryIfMissing)
@@ -67,6 +68,7 @@ copyEq = monadicIO $ do
     run $ withTemporaryDirectory testPath (\path -> do
         writeTree shouldChown (path // "src") tree
         createDirectoryIfMissing True (path // "blobs")
+        ensureLatestFormat (path // "blobs")
         DDB.doBackup DDB.JobSpec { DDB.src   = path // "src"
                                  , DDB.dest  = path // "dest"
                                  , DDB.blobs = path // "blobs"
@@ -86,6 +88,7 @@ cTimeCopyEq = monadicIO $ do
     run $ withTemporaryDirectory testPath (\path -> do
         writeTree shouldChown (path // "src") tree
         createDirectoryIfMissing True (path // "blobs")
+        ensureLatestFormat (path // "blobs")
         createDirectoryIfMissing True (path // "dest")
         DDB.doBackup DDB.JobSpec { DDB.src   = path // "src"
                                  , DDB.dest  = path // "dest/1"
