@@ -3,6 +3,7 @@ module Main (main) where
 import DedupBackup (JobSpec(..), doBackup)
 import ConvertVersion (ensureLatestFormat)
 import Options.Applicative
+import Data.Monoid ((<>))
 
 
 argParser :: Parser JobSpec
