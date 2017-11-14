@@ -3,18 +3,17 @@ module TestUtil where
 
 import Test.Framework
 
-import Control.Monad                  (forM_, liftM, when)
-import Data.Bits                      ((.&.), (.|.))
-import DedupBackup                    ((//))
+import Control.Monad             (forM_, liftM, when)
+import Data.Bits                 ((.&.), (.|.))
+import DedupBackup               ((//))
 import System.Directory
     ( createDirectoryIfMissing
     , getDirectoryContents
     , removeDirectoryRecursive
     , removeFile
     )
-import System.Posix.Directory.Foreign (pathMax)
-import Test.QuickCheck.Arbitrary      (Arbitrary, arbitrary)
-import Test.QuickCheck.Gen            (oneof)
+import Test.QuickCheck.Arbitrary (Arbitrary, arbitrary)
+import Test.QuickCheck.Gen       (oneof)
 
 import qualified Data.ByteString.Lazy          as B
 import qualified Data.Map.Strict               as M
@@ -160,6 +159,12 @@ instance Arbitrary (DDB.FileTree FileStatus) where
     -- arbitrary amount of extra padding:
     arbitrary = arbitrary' $ pathMax - length ("/tmp/" ++ testPath) - 10
       where
+        -- | pathMax is provided by posix-paths, but (a) it seems excessive to
+        -- pull in a dependency for one constant, and (b) posix-paths requires
+        -- an older version of base than what Arch currently has. (This
+        -- probably isn't a "real" dependency, just a case of not having bumped
+        -- the version):
+        pathMax = 4096
         arbitrary' maxlen = do
             status <- arbitrary
             if DDB.isDirectory status then do
