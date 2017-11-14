@@ -16,20 +16,23 @@
 -}
 module DedupBackup where
 
-import qualified Data.Map.Strict as M
-import qualified System.Posix.Files as PF
-import qualified System.Posix.Types as PT
-import qualified System.Posix.IO as PIO
-import System.IO (hClose)
-import System.Directory (getDirectoryContents, createDirectoryIfMissing, doesFileExist)
-import Control.Exception (try, IOException)
-import Control.Monad (liftM, forM_, mapM_, unless, when)
-import qualified Crypto.Hash.SHA1 as SHA1
-import qualified Data.ByteString.Lazy as B
-import qualified Data.ByteString.Base16 as Hex
-import Data.ByteString.Char8 (unpack)
 import System.Environment
-import Data.List (stripPrefix)
+
+import Control.Exception     (IOException, try)
+import Control.Monad         (forM_, liftM, mapM_, unless, when)
+import Data.ByteString.Char8 (unpack)
+import Data.List             (stripPrefix)
+import System.Directory
+    (createDirectoryIfMissing, doesFileExist, getDirectoryContents)
+import System.IO             (hClose)
+
+import qualified Crypto.Hash.SHA1       as SHA1
+import qualified Data.ByteString.Base16 as Hex
+import qualified Data.ByteString.Lazy   as B
+import qualified Data.Map.Strict        as M
+import qualified System.Posix.Files     as PF
+import qualified System.Posix.IO        as PIO
+import qualified System.Posix.Types     as PT
 
 
 dedupCutOff = 128 -- | number of bytes under which a file is just copied wholesale.
