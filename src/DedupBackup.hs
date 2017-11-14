@@ -36,7 +36,7 @@ dedupCutOff = 128 -- | number of bytes under which a file is just copied wholesa
                   -- Anything bigger than this gets the fancy dedup treatment.
 
 
--- This stuff exists for the testsuite's benift. When running the program, the
+-- This stuff exists for the testsuite's benefit. When running the program, the
 -- only instance of FileStatus we ever use is PF.FileStatus, but we can't
 -- construct those, so we have our own type defined in the test suite for
 -- testing:
