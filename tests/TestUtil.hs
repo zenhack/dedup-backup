@@ -1,25 +1,28 @@
 {-# LANGUAGE FlexibleInstances #-}
 module TestUtil where
 
-import Control.Monad (liftM, forM_, when)
-import Data.Bits ((.&.), (.|.))
-import qualified Data.ByteString.Lazy as B
-import qualified Data.Map.Strict as M
-import qualified System.Posix.Files.ByteString as PFB
-import qualified System.Posix.Files as PF
-import qualified System.Posix.Types as PT
-import qualified System.Posix.User as PU
-import System.Posix.Directory.Foreign (pathMax)
-import qualified DedupBackup as DDB
-import DedupBackup ((//))
-import System.Directory (
-    createDirectoryIfMissing,
-    removeDirectoryRecursive,
-    removeFile,
-    getDirectoryContents)
 import Test.Framework
-import Test.QuickCheck.Arbitrary (Arbitrary, arbitrary)
-import Test.QuickCheck.Gen (oneof)
+
+import Control.Monad                  (forM_, liftM, when)
+import Data.Bits                      ((.&.), (.|.))
+import DedupBackup                    ((//))
+import System.Directory
+    ( createDirectoryIfMissing
+    , getDirectoryContents
+    , removeDirectoryRecursive
+    , removeFile
+    )
+import System.Posix.Directory.Foreign (pathMax)
+import Test.QuickCheck.Arbitrary      (Arbitrary, arbitrary)
+import Test.QuickCheck.Gen            (oneof)
+
+import qualified Data.ByteString.Lazy          as B
+import qualified Data.Map.Strict               as M
+import qualified DedupBackup                   as DDB
+import qualified System.Posix.Files            as PF
+import qualified System.Posix.Files.ByteString as PFB
+import qualified System.Posix.Types            as PT
+import qualified System.Posix.User             as PU
 
 -- We want to be able to do testing as a regular user, so we'll construct our
 -- examples using a UID/GID that we actually control. @unsafePerformIO@ lets
@@ -181,7 +184,7 @@ instance Arbitrary (DDB.FileTree FileStatus) where
 -- We could make a functor instance, but it's not incredibly natural for the
 -- FileStatus to be the "value" per se, and we don't really need the generality.
 mapStatus :: (a -> b) -> DDB.FileTree a -> DDB.FileTree b
-mapStatus f (DDB.Symlink s) = DDB.Symlink (f s)
+mapStatus f (DDB.Symlink s)     = DDB.Symlink (f s)
 mapStatus f (DDB.RegularFile s) = DDB.RegularFile (f s)
 mapStatus f (DDB.Directory s c) = DDB.Directory (f s) (M.map (mapStatus f) c)
 

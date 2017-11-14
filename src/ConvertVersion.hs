@@ -14,11 +14,11 @@ TODO: this module does less error handling than it should.
 -}
 module ConvertVersion (getVersion, convert, ensureLatestFormat) where
 
-import Control.Exception (catch, IOException)
-import Control.Monad (when, forM_)
-import System.Directory (createDirectoryIfMissing, getDirectoryContents)
+import Control.Exception  (IOException, catch)
+import Control.Monad      (forM_, when)
+import System.Directory   (createDirectoryIfMissing, getDirectoryContents)
 import System.Posix.Files (rename)
-import Text.Printf (printf)
+import Text.Printf        (printf)
 
 currentVersion = 1 :: Int
 
@@ -31,7 +31,7 @@ getVersion path = getVersion' `catchIO` (\_ -> return 0) where
     getVersion' = parse <$> readFile (path ++ "/version")
     parse str = case reads str of
         [(x, _)]-> x
-        _ -> 0
+        _        -> 0
 
 -- | @convert path@ converts the blob directory at @path@ to the latest version.
 convert :: FilePath -> IO ()

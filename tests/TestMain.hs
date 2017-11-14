@@ -1,21 +1,21 @@
 {-# LANGUAGE FlexibleInstances #-}
 module Main where
 
-import TestUtil
 import Test.Framework
 import Test.Framework.Providers.QuickCheck2
 import Test.QuickCheck.Monadic
-import Test.QuickCheck (arbitrary, Property)
-import qualified DedupBackup as DDB
-import DedupBackup ((//))
-import ConvertVersion (ensureLatestFormat)
+import TestUtil
 
+import ConvertVersion        (ensureLatestFormat)
+import DedupBackup           ((//))
+import System.Directory      (createDirectoryIfMissing)
 import System.Unix.Directory (withTemporaryDirectory)
-import System.Directory (createDirectoryIfMissing)
+import Test.QuickCheck       (Property, arbitrary)
 
 import qualified Data.ByteString.Lazy as B
-import qualified System.Posix.Files as PF
-import qualified Data.Map.Strict as M
+import qualified Data.Map.Strict      as M
+import qualified DedupBackup          as DDB
+import qualified System.Posix.Files   as PF
 
 syncMetadataEq :: Property
 syncMetadataEq = monadicIO $ do
